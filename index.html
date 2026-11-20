@@ -688,6 +688,8 @@
         import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
         import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
         import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+        window.THREE = THREE;
+        window.GLTFLoader = GLTFLoader;
 
         // Captura de Diagnóstico en Tiempo Real para Dispositivos Móviles
         window.addEventListener('error', (e) => {
@@ -1492,8 +1494,6 @@ uniform vec3 u_camPos;
                 varying float vDist;
 
                 #include <common>
-                #include <tonemapping_pars_fragment>
-                #include <colorspace_pars_fragment>
 
                 void main() {
                     vec2 pos = vWorldPos.xz;
@@ -1999,6 +1999,9 @@ uniform vec3 u_camPos;
 
             scene.add(shipGroup);
             ship = shipGroup;
+            window.scene = scene;
+            window.camera = camera;
+            window.ship = ship;
 
             const initX = (currentState && currentState.x !== undefined) ? currentState.x : 220.0;
             const initZ = (currentState && currentState.y !== undefined) ? currentState.y : 350.0;
@@ -2279,33 +2282,39 @@ uniform vec3 u_camPos;
         const gltfLoader = new GLTFLoader();
 
         /**
-         * Alinea la eslora del buque a lo largo del eje longitudinal Z (Three.js: proa +Z, popa -Z),
-         * escala a la eslora física de diseño y ajusta el calado hidrostático en Y.
-         * Aplica materiales PBR visibles a doble cara y reflectividad calibrada.
+         * Alinea la eslora del buque a lo largo del eje longitudinal Z (proa +Z, popa -Z),
+         * escala a la eslora física de diseño y sumerge el casco según su calado hidrostático real.
+         * Configura materiales PBR para máxima fidelidad y visibilidad a doble cara.
          */
-        function alignShipModel(model, targetLength, draftOffset = 0, rotX = 0, rotY = 0, rotZ = 0, brightnessBoost = false) {
-            model.rotation.set(rotX, rotY, rotZ);
+        function alignShipModel(model, targetLength, draftOffset = 0, rotY = 0) {
+            model.rotation.set(0, rotY, 0);
             model.updateMatrixWorld(true);
 
             let bBox = new THREE.Box3().setFromObject(model);
             let bSize = new THREE.Vector3();
             bBox.getSize(bSize);
 
-            // Determinar eslora real considerando los 3 ejes
-            const currentLen = Math.max(bSize.x, bSize.y, bSize.z);
-            const sc = targetLength / Math.max(0.001, currentLen);
+            // Si el modelo 3D fue exportado con la proa a lo largo del eje X, rotarlo 90° hacia Z
+            if (bSize.x > bSize.z * 1.35) {
+                model.rotation.y += -Math.PI / 2;
+                model.updateMatrixWorld(true);
+                bBox = new THREE.Box3().setFromObject(model);
+                bBox.getSize(bSize);
+            }
+
+            const lengthCurrent = Math.max(bSize.x, bSize.z);
+            const sc = targetLength / Math.max(0.001, lengthCurrent);
             model.scale.set(sc, sc, sc);
             model.updateMatrixWorld(true);
 
-            // Centrar geométricamente en X y Z, y ajustar el calado en Y
-            const finalBox = new THREE.Box3().setFromObject(model);
-            const center = new THREE.Vector3();
-            finalBox.getCenter(center);
-            model.position.x -= center.x;
-            model.position.y -= (finalBox.min.y + draftOffset);
-            model.position.z -= center.z;
+            bBox = new THREE.Box3().setFromObject(model);
+            const bCenter = new THREE.Vector3();
+            bBox.getCenter(bCenter);
 
-            // Garantizar visibilidad de materiales PBR a doble cara
+            // El calado (draftOffset) sumerge la obra viva debajo de la línea de agua
+            model.position.set(-bCenter.x, -bBox.min.y - draftOffset, -bCenter.z);
+
+            // Garantizar visibilidad de materiales PBR a doble cara y colorSpace sRGB
             model.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = !isMobile;
@@ -2314,15 +2323,6 @@ uniform vec3 u_camPos;
                         const mats = Array.isArray(child.material) ? child.material : [child.material];
                         mats.forEach(mat => {
                             mat.side = THREE.DoubleSide;
-                            if (brightnessBoost) {
-                                if (mat.color && !mat.map) mat.color.setHex(0xdce3ea);
-                                mat.metalness = Math.min(0.20, mat.metalness || 0.15);
-                                mat.roughness = Math.max(0.40, mat.roughness || 0.50);
-                            } else {
-                                if (mat.color && !mat.map) mat.color.setHex(0xffffff);
-                                mat.metalness = Math.min(0.25, mat.metalness || 0.15);
-                                mat.roughness = Math.max(0.35, mat.roughness || 0.50);
-                            }
                             if (mat.map) {
                                 mat.map.colorSpace = THREE.SRGBColorSpace;
                             }
@@ -2330,13 +2330,13 @@ uniform vec3 u_camPos;
                     }
                 }
             });
-            return { scale: sc, bBox: finalBox, bSize };
+            return { scale: sc, bBox, bSize };
         }
 
         // 1. Integración de Modelo GLB para el Patrullero de Combate (Misión 1)
         gltfLoader.load('models/patrol_boat.glb', (gltf) => {
             const patrolGlb = gltf.scene;
-            alignShipModel(patrolGlb, 16.0, 0.85, 0, 0, 0);
+            alignShipModel(patrolGlb, 16.0, 0.85);
 
             // Ocultar geometrías placeholder del patrullero, manteniendo luces y estela
             patrolCombatGroup.children.forEach(c => {
@@ -2351,7 +2351,7 @@ uniform vec3 u_camPos;
         // 2. Integración de Modelo GLB para el Dron Furtivo USV STEALTH Interceptor
         gltfLoader.load('models/stalker_usv.glb', (gltf) => {
             const usvGlb = gltf.scene;
-            alignShipModel(usvGlb, 5.5, 0.22, -Math.PI / 2, 0, 0);
+            alignShipModel(usvGlb, 5.5, 0.22);
 
             if (ship && ship.userData.usvSubGroup) {
                 // Ocultar geometrías placeholder del USV procedural manteniendo tobera y estrobo
@@ -2423,7 +2423,7 @@ uniform vec3 u_camPos;
         // 2B. Carga de Buque Mercante Granelero de Ultramar (.GLB - 131m)
         gltfLoader.load('models/cargo_ship_empty.glb', (gltf) => {
             const mGlb = gltf.scene;
-            alignShipModel(mGlb, 131.2, 4.20, Math.PI / 2, 0, 0);
+            alignShipModel(mGlb, 131.2, 4.20);
             merchantGroup.children.forEach(c => {
                 if (c !== merchantGroup.userData.wake) c.visible = false;
             });
@@ -2433,7 +2433,7 @@ uniform vec3 u_camPos;
             console.warn('Aviso: Cargando buque mercante Gunnerus de respaldo:', err);
             gltfLoader.load('models/gunnerus.glb', (gltf2) => {
                 const gGlb = gltf2.scene;
-                alignShipModel(gGlb, 41.1, 2.50, 0, -Math.PI / 2, 0);
+                alignShipModel(gGlb, 41.1, 2.50);
                 merchantGroup.children.forEach(c => {
                     if (c !== merchantGroup.userData.wake) c.visible = false;
                 });
@@ -2467,7 +2467,7 @@ uniform vec3 u_camPos;
 
         gltfLoader.load('models/lng_ship.glb', (gltf) => {
             const lngGlb = gltf.scene;
-            alignShipModel(lngGlb, 210.0, 6.50, Math.PI / 2, 0, 0);
+            alignShipModel(lngGlb, 210.0, 6.50);
             if (lngGroup.userData.procLng) {
                 lngGroup.userData.procLng.forEach(c => c.visible = false);
             }
@@ -2503,7 +2503,7 @@ uniform vec3 u_camPos;
 
         gltfLoader.load('models/mothership.glb', (gltf) => {
             const wGlb = gltf.scene.clone();
-            alignShipModel(wGlb, 8.5, 0.45, 0, 0, 0);
+            alignShipModel(wGlb, 8.5, 0.45);
             swarmWingmanGroup.children.forEach(c => {
                 if (c !== swarmWingmanGroup.userData.wake) c.visible = false;
             });
@@ -2513,7 +2513,7 @@ uniform vec3 u_camPos;
         // Carga de Destructor de Guerra USS Arleigh Burke DDG-51 Texturizado PBR (Misión 5)
         gltfLoader.load('models/arleigh_burke_textured.glb', (gltf) => {
             const warGlb = gltf.scene;
-            alignShipModel(warGlb, 153.8, 5.80, Math.PI / 2, 0, 0);
+            alignShipModel(warGlb, 153.8, 5.80);
             warshipGroup.children.forEach(c => c.visible = false);
             warshipGroup.add(warGlb);
             console.log('✅ [3D GLB] Destructor Arleigh Burke DDG-51 (PBR Texturizado) cargado con calado sumergido (-5.8m).');
@@ -2521,7 +2521,7 @@ uniform vec3 u_camPos;
             console.warn('Aviso: Cargando destructor de respaldo:', err);
             gltfLoader.load('models/arleigh_burke_ddg51.glb', (gltf2) => {
                 const w2 = gltf2.scene;
-                alignShipModel(w2, 153.8, 5.80, 0, Math.PI / 2, 0);
+                alignShipModel(w2, 153.8, 5.80);
                 warshipGroup.children.forEach(c => c.visible = false);
                 warshipGroup.add(w2);
             });
@@ -2530,7 +2530,7 @@ uniform vec3 u_camPos;
         // Carga del Dron Furtivo Stalker USV (.GLB) para Blanco de Misión 4
         gltfLoader.load('models/stalker_usv.glb', (gltf) => {
             const stalkerGlb = gltf.scene;
-            alignShipModel(stalkerGlb, 5.5, 0.22, -Math.PI / 2, 0, 0);
+            alignShipModel(stalkerGlb, 5.5, 0.22);
             stalkerTargetGroup.children.forEach(c => {
                 if (c !== stalkerTargetGroup.userData.wake) c.visible = false;
             });
@@ -2541,7 +2541,7 @@ uniform vec3 u_camPos;
         // Carga de la Corbeta Patrullera Korsar (.GLB) para el Buque del Jugador
         gltfLoader.load('models/korsar.glb', (gltf) => {
             const kGlb = gltf.scene;
-            alignShipModel(kGlb, 45.0, 2.40, -Math.PI / 2, 0, 0, true);
+            alignShipModel(kGlb, 45.0, 2.40);
             if (ship && ship.userData.korsarGroup) {
                 if (ship.userData.procKorsar) ship.userData.procKorsar.visible = false;
                 ship.userData.korsarGroup.add(kGlb);
@@ -2552,7 +2552,7 @@ uniform vec3 u_camPos;
         // Carga del Dron Naval Kamikaze / Reconocimiento Sea Baby (.GLB) para el Jugador
         gltfLoader.load('models/seababy_usv_drone.glb', (gltf) => {
             const sbGlb = gltf.scene;
-            alignShipModel(sbGlb, 6.2, 0.25, -Math.PI / 2, 0, 0, true);
+            alignShipModel(sbGlb, 6.2, 0.25);
             if (ship && ship.userData.seababyGroup) {
                 if (ship.userData.procSeaBaby) ship.userData.procSeaBaby.visible = false;
                 ship.userData.seababyGroup.add(sbGlb);
@@ -2563,7 +2563,7 @@ uniform vec3 u_camPos;
         // Carga de la Balsa Salvavidas SAR (.GLB) para la Misión 3
         gltfLoader.load('models/liferaft.glb', (gltf) => {
             const raftGlb = gltf.scene;
-            alignShipModel(raftGlb, 4.2, 0.22, 0, 0, 0);
+            alignShipModel(raftGlb, 4.2, 0.22);
             sarRaftGroup.children.forEach(c => {
                 if (c !== sarStrobeLight) c.visible = false;
             });
@@ -2579,7 +2579,7 @@ uniform vec3 u_camPos;
 
         gltfLoader.load('models/survey_boat.glb', (gltf) => {
             const sGlb = gltf.scene;
-            alignShipModel(sGlb, 14.8, 0.85, 0, 0, 0);
+            alignShipModel(sGlb, 14.8, 0.85);
             surveyBoatGroup.add(sGlb);
             console.log('✅ [3D GLB] Lancha Hidrográfica Survey Boat cargada en el agua (-0.85m).');
         }, undefined, (err) => console.warn('Aviso al cargar Survey Boat:', err));
@@ -2606,7 +2606,7 @@ uniform vec3 u_camPos;
 
         gltfLoader.load('models/carrier_ships.glb', (gltf) => {
             const carGlb = gltf.scene;
-            alignShipModel(carGlb, 260.0, 7.50, Math.PI / 2, 0, 0);
+            alignShipModel(carGlb, 260.0, 7.50);
             if (carrierGroup.userData.procCarrier) {
                 carrierGroup.userData.procCarrier.forEach(c => c.visible = false);
             }
