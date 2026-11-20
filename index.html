@@ -774,19 +774,24 @@
         window.THREE = THREE;
         window.GLTFLoader = GLTFLoader;
 
+        // Configuración de Telemetría y Logging Silencioso (Producción limpia sin spam)
+        window.DEBUG_NAVAL = false;
+        const navalLog = (...args) => { if (window.DEBUG_NAVAL) console.log(...args); };
+        const navalWarn = (...args) => { if (window.DEBUG_NAVAL) console.warn(...args); };
+
         // Captura de Diagnóstico en Tiempo Real para Dispositivos Móviles
         window.addEventListener('error', (e) => {
-            console.error("Device error:", e.message, e.filename, e.lineno);
+            if (window.DEBUG_NAVAL) console.error("Device error:", e.message, e.filename, e.lineno);
             const box = document.getElementById('runtimeErrorAlert');
             const msg = document.getElementById('runtimeErrorMsg');
-            if (box && msg) {
+            if (box && msg && e.message && !e.message.includes('ResizeObserver')) {
                 const fname = e.filename ? e.filename.split('/').pop() : 'script';
                 msg.innerText = `Error: ${e.message} (${fname}:${e.lineno})`;
                 box.classList.remove('hidden');
             }
         });
         window.addEventListener('unhandledrejection', (e) => {
-            console.warn("Unhandled promise:", e.reason);
+            if (window.DEBUG_NAVAL) console.warn("Unhandled promise:", e.reason);
         });
 
         /* -------------------------------------------------------------------------
@@ -939,7 +944,7 @@
                     waveInfo.innerText = `${data.spectrum} Hs=${data.Hs}m Tp=${data.Tp}s @ ${data.direction_deg}°`;
                 }
             } catch (err) {
-                console.warn("[SYNC ESPECTRAL] Servidor backend no detectado, cargando oleaje sintético JONSWAP:", err);
+                navalWarn("[SYNC ESPECTRAL] Servidor backend no detectado, cargando oleaje sintético JONSWAP:", err);
                 if (!waveComponents || waveComponents.length === 0) {
                     generateSyntheticWaves(2.2, 5.5, 3.3, 35.0);
                 }
@@ -1139,10 +1144,10 @@
         // Recuperación ante Pérdida de Contexto WebGL (evita congelamiento en móviles)
         canvas.addEventListener('webglcontextlost', (e) => {
             e.preventDefault();
-            console.warn('[WebGL] Contexto gráfico suspendido temporalmente por el sistema.');
+            navalWarn('[WebGL] Contexto gráfico suspendido temporalmente por el sistema.');
         }, false);
         canvas.addEventListener('webglcontextrestored', () => {
-            console.log('[WebGL] Contexto gráfico restaurado con éxito.');
+            navalLog('[WebGL] Contexto gráfico restaurado con éxito.');
         }, false);
 
         const controls = new OrbitControls(camera, renderer.domElement);
@@ -3064,8 +3069,8 @@ class Water extends Mesh {
                 }
             });
             patrolCombatGroup.add(patrolGlb);
-            console.log('✅ [3D GLB] Patrullero de Combate táctico cargado con calado sumergido (-0.85m).');
-        }, undefined, (err) => console.warn('Aviso: Cargando modelo procedural de Patrullero:', err));
+            navalLog('✅ [3D GLB] Patrullero de Combate táctico cargado con calado sumergido (-0.85m).');
+        }, undefined, (err) => navalWarn('Aviso: Cargando modelo procedural de Patrullero:', err));
 
         // 2. Integración de Modelo GLB para el Dron Furtivo USV STEALTH Interceptor
         gltfLoader.load('models/stalker_usv.glb', (gltf) => {
@@ -3081,8 +3086,8 @@ class Water extends Mesh {
                 });
                 ship.userData.usvSubGroup.add(usvGlb);
             }
-            console.log('✅ [3D GLB] Dron Furtivo USV STEALTH (Stalker .GLB) cargado con calado sumergido (-0.22m).');
-        }, undefined, (err) => console.warn('Aviso: Cargando modelo procedural de USV Stealth:', err));
+            navalLog('✅ [3D GLB] Dron Furtivo USV STEALTH (Stalker .GLB) cargado con calado sumergido (-0.22m).');
+        }, undefined, (err) => navalWarn('Aviso: Cargando modelo procedural de USV Stealth:', err));
 
         // 2B. Buque Mercante Comercial Autónomo (COLREGS Regla 15)
         const merchantGroup = new THREE.Group();
@@ -3147,9 +3152,9 @@ class Water extends Mesh {
                 if (c !== merchantGroup.userData.wake) c.visible = false;
             });
             merchantGroup.add(mGlb);
-            console.log('✅ [3D GLB] Buque Mercante Granelero (131m) cargado con calado sumergido (-4.2m).');
+            navalLog('✅ [3D GLB] Buque Mercante Granelero (131m) cargado con calado sumergido (-4.2m).');
         }, undefined, (err) => {
-            console.warn('Aviso: Cargando buque mercante Gunnerus de respaldo:', err);
+            navalWarn('Aviso: Cargando buque mercante Gunnerus de respaldo:', err);
             gltfLoader.load('models/gunnerus.glb', (gltf2) => {
                 const gGlb = gltf2.scene;
                 alignShipModel(gGlb, 41.1, 2.50);
@@ -3191,8 +3196,8 @@ class Water extends Mesh {
                 lngGroup.userData.procLng.forEach(c => c.visible = false);
             }
             lngGroup.add(lngGlb);
-            console.log('✅ [3D GLB] Metanero LNG Pacific Voyager (210m) cargado con calado sumergido (-6.5m).');
-        }, undefined, (err) => console.warn('Aviso: LNG tanker:', err));
+            navalLog('✅ [3D GLB] Metanero LNG Pacific Voyager (210m) cargado con calado sumergido (-6.5m).');
+        }, undefined, (err) => navalWarn('Aviso: LNG tanker:', err));
 
         // 2C. Segundo Buque No Tripulado: Modo Enjambre (Swarm USV-02 Ala)
         const swarmWingmanGroup = new THREE.Group();
@@ -3227,7 +3232,7 @@ class Water extends Mesh {
                 if (c !== swarmWingmanGroup.userData.wake) c.visible = false;
             });
             swarmWingmanGroup.add(wGlb);
-        }, undefined, (err) => console.warn('Aviso: USV-02 procedural:', err));
+        }, undefined, (err) => navalWarn('Aviso: USV-02 procedural:', err));
 
         // Carga de Destructor de Guerra USS Arleigh Burke DDG-51 Texturizado PBR (Misión 5)
         gltfLoader.load('models/arleigh_burke_textured.glb', (gltf) => {
@@ -3235,9 +3240,9 @@ class Water extends Mesh {
             alignShipModel(warGlb, 153.8, 5.80);
             warshipGroup.children.forEach(c => c.visible = false);
             warshipGroup.add(warGlb);
-            console.log('✅ [3D GLB] Destructor Arleigh Burke DDG-51 (PBR Texturizado) cargado con calado sumergido (-5.8m).');
+            navalLog('✅ [3D GLB] Destructor Arleigh Burke DDG-51 (PBR Texturizado) cargado con calado sumergido (-5.8m).');
         }, undefined, (err) => {
-            console.warn('Aviso: Cargando destructor de respaldo:', err);
+            navalWarn('Aviso: Cargando destructor de respaldo:', err);
             gltfLoader.load('models/arleigh_burke_ddg51.glb', (gltf2) => {
                 const w2 = gltf2.scene;
                 alignShipModel(w2, 153.8, 5.80);
@@ -3254,8 +3259,8 @@ class Water extends Mesh {
                 if (c !== stalkerTargetGroup.userData.wake) c.visible = false;
             });
             stalkerTargetGroup.add(stalkerGlb);
-            console.log('✅ [3D GLB] Dron Furtivo Stalker USV cargado con calado sumergido (-0.22m).');
-        }, undefined, (err) => console.warn('Aviso: Stalker USV procedural:', err));
+            navalLog('✅ [3D GLB] Dron Furtivo Stalker USV cargado con calado sumergido (-0.22m).');
+        }, undefined, (err) => navalWarn('Aviso: Stalker USV procedural:', err));
 
         // Carga de la Corbeta Patrullera Korsar (.GLB) para el Buque del Jugador
         gltfLoader.load('models/korsar.glb', (gltf) => {
@@ -3265,8 +3270,8 @@ class Water extends Mesh {
                 if (ship.userData.procKorsar) ship.userData.procKorsar.visible = false;
                 ship.userData.korsarGroup.add(kGlb);
             }
-            console.log('✅ [3D GLB] Corbeta Patrullera Korsar (.GLB) cargada con calado sumergido (-2.4m).');
-        }, undefined, (err) => console.warn('Aviso al cargar Korsar:', err));
+            navalLog('✅ [3D GLB] Corbeta Patrullera Korsar (.GLB) cargada con calado sumergido (-2.4m).');
+        }, undefined, (err) => navalWarn('Aviso al cargar Korsar:', err));
 
         // Carga del Dron Naval Kamikaze / Reconocimiento Sea Baby (.GLB) para el Jugador
         gltfLoader.load('models/seababy_usv_drone.glb', (gltf) => {
@@ -3276,8 +3281,8 @@ class Water extends Mesh {
                 if (ship.userData.procSeaBaby) ship.userData.procSeaBaby.visible = false;
                 ship.userData.seababyGroup.add(sbGlb);
             }
-            console.log('✅ [3D GLB] Dron Naval Sea Baby (.GLB) cargado con calado sumergido (-0.25m).');
-        }, undefined, (err) => console.warn('Aviso al cargar Sea Baby:', err));
+            navalLog('✅ [3D GLB] Dron Naval Sea Baby (.GLB) cargado con calado sumergido (-0.25m).');
+        }, undefined, (err) => navalWarn('Aviso al cargar Sea Baby:', err));
 
         // Carga de la Balsa Salvavidas SAR (.GLB) para la Misión 3
         gltfLoader.load('models/liferaft.glb', (gltf) => {
@@ -3287,8 +3292,8 @@ class Water extends Mesh {
                 if (c !== sarStrobeLight) c.visible = false;
             });
             sarRaftGroup.add(raftGlb);
-            console.log('✅ [3D GLB] Balsa Salvavidas Neumática SAR (.GLB) cargada en el agua (-0.22m).');
-        }, undefined, (err) => console.warn('Aviso al cargar balsa SAR:', err));
+            navalLog('✅ [3D GLB] Balsa Salvavidas Neumática SAR (.GLB) cargada en el agua (-0.22m).');
+        }, undefined, (err) => navalWarn('Aviso al cargar balsa SAR:', err));
 
         // Carga de la Embarcación Hidrográfica & Científica Survey Boat (.GLB)
         const surveyBoatGroup = new THREE.Group();
@@ -3300,8 +3305,8 @@ class Water extends Mesh {
             const sGlb = gltf.scene;
             alignShipModel(sGlb, 14.8, 0.85);
             surveyBoatGroup.add(sGlb);
-            console.log('✅ [3D GLB] Lancha Hidrográfica Survey Boat cargada en el agua (-0.85m).');
-        }, undefined, (err) => console.warn('Aviso al cargar Survey Boat:', err));
+            navalLog('✅ [3D GLB] Lancha Hidrográfica Survey Boat cargada en el agua (-0.85m).');
+        }, undefined, (err) => navalWarn('Aviso al cargar Survey Boat:', err));
 
         // Carga del Portaaviones Naval de Escuadra (.GLB) en Aguas Profundas
         const carrierGroup = new THREE.Group();
@@ -3330,8 +3335,8 @@ class Water extends Mesh {
                 carrierGroup.userData.procCarrier.forEach(c => c.visible = false);
             }
             carrierGroup.add(carGlb);
-            console.log('✅ [3D GLB] Portaaviones Naval (260m) cargado con calado sumergido (-7.5m).');
-        }, undefined, (err) => console.warn('Aviso al cargar Portaaviones:', err));
+            navalLog('✅ [3D GLB] Portaaviones Naval (260m) cargado con calado sumergido (-7.5m).');
+        }, undefined, (err) => navalWarn('Aviso al cargar Portaaviones:', err));
 
         // 2D. Líneas Tácticas Datalink de Pinza Naval en 3D
         const pincerLineGeo = new THREE.BufferGeometry();
@@ -3407,8 +3412,8 @@ class Water extends Mesh {
 
             harborGroup.add(beaconGroup);
             lighthouseBeacon = beaconGroup;
-            console.log('✅ [3D GLB] Isla Naval y Faro Marítimo integrados.');
-        }, undefined, (err) => console.warn('Aviso: Isla procedural:', err));
+            navalLog('✅ [3D GLB] Isla Naval y Faro Marítimo integrados.');
+        }, undefined, (err) => navalWarn('Aviso: Isla procedural:', err));
 
         // B) Muelle Militar de Atraque (Reinforced Concrete Pier & Terminal Portuaria .GLB)
         const pierMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.75, metalness: 0.25 });
@@ -3431,8 +3436,8 @@ class Water extends Mesh {
             });
             dockMesh.visible = false;
             harborGroup.add(termGlb);
-            console.log('✅ [3D GLB] Terminal Portuaria con Grúas STS integrada para Misión 2.');
-        }, undefined, (err) => console.warn('Aviso: Muelle procedural:', err));
+            navalLog('✅ [3D GLB] Terminal Portuaria con Grúas STS integrada para Misión 2.');
+        }, undefined, (err) => navalWarn('Aviso: Muelle procedural:', err));
 
         // Boyas Marinas IALA de Señalización de Canal de Acceso (Babor / Estribor)
         gltfLoader.load('models/boya_marina.glb', (gltf) => {
@@ -3449,8 +3454,8 @@ class Water extends Mesh {
             boyaGroup2.position.set(harborBaseX + 35.0, 0, harborBaseZ - 35.0);
             boyaGroup2.add(b2);
             scene.add(boyaGroup2);
-            console.log('✅ [3D GLB] Boyas Marinas de Canal integradas en el agua.');
-        }, undefined, (err) => console.warn('Aviso: Boya marina:', err));
+            navalLog('✅ [3D GLB] Boyas Marinas de Canal integradas en el agua.');
+        }, undefined, (err) => navalWarn('Aviso: Boya marina:', err));
 
         // Defensas de atraque (fenders) y noráis de amarre (bollards)
         const fenderMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
@@ -4775,7 +4780,7 @@ class Water extends Mesh {
                     try { ws.close(); } catch (e) {}
                 };
             } catch (err) {
-                console.warn("[WS] Error al inicializar WebSocket:", err);
+                navalWarn("[WS] Error al inicializar WebSocket:", err);
                 const dot = document.getElementById('statusDot');
                 if (dot) dot.className = "w-2.5 h-2.5 rounded-full bg-amber-500";
                 setTimeout(connectWS, 3000);
@@ -5362,7 +5367,7 @@ class Water extends Mesh {
                     statusSpan.innerText = isLocal ? "Servidor Local (Misma red Wi-Fi)" : "Acceso Global en la Nube (Online 24/7)";
                 }
             } catch (err) {
-                console.warn("Fallo al actualizar QR dinámico:", err);
+                navalWarn("Fallo al actualizar QR dinámico:", err);
             }
         }
 
@@ -5974,7 +5979,7 @@ class Water extends Mesh {
                     aBtn.className = "bg-emerald-900/80 hover:bg-emerald-800 text-emerald-200 px-2 py-0.5 rounded border border-emerald-700 transition font-bold";
                 }
             } catch (e) {
-                console.warn("Audio init deferred until user gesture:", e);
+                navalWarn("Audio init deferred until user gesture:", e);
             }
         }
 
@@ -6175,7 +6180,7 @@ class Water extends Mesh {
                 noiseSource.start(now);
                 noiseSource.stop(now + 0.6);
             } catch (err) {
-                console.warn("Cannon sound error:", err);
+                navalWarn("Cannon sound error:", err);
             }
         }
 
@@ -6203,7 +6208,7 @@ class Water extends Mesh {
                 noiseSource.start(now);
                 noiseSource.stop(now + 1.2);
             } catch (err) {
-                console.warn("Flare sound error:", err);
+                navalWarn("Flare sound error:", err);
             }
         }
 
@@ -8059,7 +8064,7 @@ class Water extends Mesh {
                         await document.documentElement.requestFullscreen();
                     }
                 } catch (e) {
-                    console.log("No se pudo forzar orientación:", e);
+                    navalLog("No se pudo forzar orientación:", e);
                 }
                 if (landscapeOverlay) landscapeOverlay.classList.add('hidden');
             });
@@ -8134,7 +8139,7 @@ class Water extends Mesh {
         if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js?v=19').catch((err) => {
-                    console.log('SW registration error:', err);
+                    navalLog('SW registration error:', err);
                 });
             });
         }
@@ -8165,29 +8170,31 @@ class Water extends Mesh {
             try {
                 applyMissionScenario(1);
             } catch (e) {
-                console.warn("[INIT] Fallback en escenario de misión:", e);
+                navalWarn("[INIT] Fallback en escenario de misión:", e);
             }
             try {
                 await fetchWaveComponents();
             } catch (e) {
-                console.warn("[INIT] Fallback en componentes de ola:", e);
+                navalWarn("[INIT] Fallback en componentes de ola:", e);
             }
             try {
                 connectWS();
             } catch (e) {
-                console.warn("[INIT] Fallback en WebSocket:", e);
+                navalWarn("[INIT] Fallback en WebSocket:", e);
             }
 
-            // [SPEC 9] Diagnóstico al arrancar
-            console.group('[DIAG] Océano Infinito Bi-Nivel');
-            console.log('camera.far =', camera.far);
-            console.log('sky radius =', SKY_RADIUS);
-            console.log('tactical size =', 2400);
-            console.log('ring inner/outer =', 1050, 16000);
-            console.log('fog density =', scene.fog.density);
-            console.log('fog color =', '#' + scene.fog.color.getHexString());
-            console.log('waves unrolled =', WAVE_UNROLL);
-            console.groupEnd();
+            // [SPEC 9] Diagnóstico al arrancar (solo en modo debug)
+            if (window.DEBUG_NAVAL) {
+                console.group('[DIAG] Océano Infinito Bi-Nivel');
+                console.log('camera.far =', camera.far);
+                console.log('sky radius =', SKY_RADIUS);
+                console.log('tactical size =', 2400);
+                console.log('ring inner/outer =', 1050, 16000);
+                console.log('fog density =', scene.fog.density);
+                console.log('fog color =', '#' + scene.fog.color.getHexString());
+                console.log('waves unrolled =', WAVE_UNROLL);
+                console.groupEnd();
+            }
 
             requestAnimationFrame(animate);
         })();
