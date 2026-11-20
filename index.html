@@ -3247,6 +3247,42 @@ class Water extends Mesh {
         seaTrialsGroup.visible = false;
         scene.add(seaTrialsGroup);
 
+        // J) Sistema de Amarras Navales y Estachas 3D (Misión 6 - Zarpe y Desatraque La Guaira)
+        const mooringRopesGroup = new THREE.Group();
+        const ropeMat = new THREE.MeshStandardMaterial({
+            color: 0xd97706,      // Color estacha cáñamo marítimo / nylon náutico
+            roughness: 0.85,
+            metalness: 0.05
+        });
+
+        // 4 Estachas de amarre según protocolo naval:
+        // 1. Largo de Proa (Bow Line)
+        // 2. Spring de Proa (Forward Spring Line)
+        // 3. Spring de Popa (Aft Spring Line)
+        // 4. Largo de Popa (Stern Line)
+        const ropeCylGeo = new THREE.CylinderGeometry(0.045, 0.045, 1.0, 8);
+        ropeCylGeo.translate(0, 0.5, 0); // Pivote en la base para orientar con un solo vector
+
+        const mooringRopes = {
+            bow: new THREE.Mesh(ropeCylGeo, ropeMat),
+            springFwd: new THREE.Mesh(ropeCylGeo, ropeMat),
+            springAft: new THREE.Mesh(ropeCylGeo, ropeMat),
+            stern: new THREE.Mesh(ropeCylGeo, ropeMat)
+        };
+
+        Object.values(mooringRopes).forEach(r => mooringRopesGroup.add(r));
+        mooringRopesGroup.visible = false;
+        scene.add(mooringRopesGroup);
+
+        function updateMooringLine(ropeMesh, pStart, pEnd) {
+            const dir = new THREE.Vector3().subVectors(pEnd, pStart);
+            const len = dir.length();
+            if (len < 0.01) return;
+            ropeMesh.position.copy(pStart);
+            ropeMesh.scale.set(1, len, 1);
+            ropeMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+        }
+
         /* -------------------------------------------------------------------------
            6. CARGA DE MODELOS .GLB HIPERREALISTAS & BASE NAVAL / PUERTO
            ------------------------------------------------------------------------- */
@@ -5038,6 +5074,11 @@ class Water extends Mesh {
             const rud = parseFloat(document.getElementById('rudderRange').value) || 0;
             const thr = parseFloat(document.getElementById('thrustRange').value) || 0;
 
+            // Alerta si se intenta dar máquina con amarras dadas al muelle (Protocolo La Guaira)
+            if (thr > 80 && currentState.mooring && currentState.mooring.fast) {
+                notifyMooringFastAlert();
+            }
+
             if (ws && ws.readyState === WebSocket.OPEN) {
                 try {
                     const payload = {
@@ -5246,6 +5287,9 @@ class Water extends Mesh {
             if (typeof seaTrialsGroup !== 'undefined' && seaTrialsGroup) {
                 seaTrialsGroup.visible = (mId === 10);
             }
+            if (typeof mooringRopesGroup !== 'undefined' && mooringRopesGroup) {
+                mooringRopesGroup.visible = (mId === 6);
+            }
 
             // 5. Sincronizar selector dropdown superior
             const selDropdown = document.getElementById('missionSelectTop');
@@ -5398,6 +5442,61 @@ class Water extends Mesh {
                         <div class="flex justify-between"><span class="text-slate-400">Vel USV:</span> <span class="font-bold ${s.u <= 2.2 ? 'text-emerald-400' : 'text-rose-400'}">${s.u.toFixed(2)} m/s</span></div>
                     </div>
                 `;
+            } else if (s.mission_id === 6) {
+                const isMoored = s.mooring && s.mooring.fast;
+                const mBow = s.mooring ? s.mooring.bow : false;
+                const mSpring = s.mooring ? s.mooring.spring : false;
+                const mStern = s.mooring ? s.mooring.stern : false;
+                const tension = (s.mooring && s.mooring.tension_pct) || 0;
+                const gates = (s.mission_details && s.mission_details.gates_passed) || 0;
+
+                dPanel.innerHTML = `
+                    <div class="font-bold text-amber-300 border-b border-slate-800 pb-0.5 mb-1 flex justify-between items-center">
+                        <span>⚓ PROTOCOLO ZARPE // AMARRAS</span>
+                        <span class="text-[7.5px] px-1.5 py-0.2 rounded font-bold ${isMoored ? 'bg-amber-950 text-amber-300 border border-amber-600 animate-pulse' : 'bg-emerald-950 text-emerald-300 border border-emerald-600'}">
+                            ${isMoored ? 'ESTACHAS FIRMES' : 'LIBRE DE AMARRAS'}
+                        </span>
+                    </div>
+                    ${isMoored ? `
+                        <div class="space-y-1 mb-1.5 text-[8.5px]">
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-300">1. Largo de Proa (N-01):</span>
+                                <span class="${mBow ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}">${mBow ? '🔴 FIRME' : '🟢 LARGADO'}</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-300">2. Springs (N-02 / N-03):</span>
+                                <span class="${mSpring ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}">${mSpring ? '🔴 FIRME' : '🟢 LARGADO'}</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-300">3. Largo de Popa (N-04):</span>
+                                <span class="${mStern ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}">${mStern ? '🔴 FIRME' : '🟢 LARGADO'}</span>
+                            </div>
+                            ${tension > 0 ? `
+                                <div class="mt-1 bg-slate-950 p-1 rounded border border-rose-800">
+                                    <div class="flex justify-between text-[7.5px] text-rose-300 font-bold mb-0.5">
+                                        <span>¡Tensión en Estachas!</span> <span>${tension.toFixed(0)}%</span>
+                                    </div>
+                                    <div class="w-full bg-slate-800 h-1.5 rounded overflow-hidden">
+                                        <div class="bg-gradient-to-r from-amber-500 to-rose-600 h-full transition-all" style="width: ${tension}%"></div>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                        <button onclick="castOffMooringLines()" class="w-full py-1.5 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 active:scale-95 text-slate-950 font-black text-[9px] rounded-lg shadow-lg border border-amber-300 cursor-pointer transition flex items-center justify-center gap-1.5">
+                            <span>⚡ LARGAR TODAS LAS AMARRAS [L]</span>
+                        </button>
+                    ` : `
+                        <div class="space-y-0.5 text-[8.5px]">
+                            <div class="flex justify-between"><span class="text-slate-400">Canal IALA:</span> <span class="font-bold text-emerald-400">ENFILACIÓN NORTE (+Y)</span></div>
+                            <div class="flex justify-between"><span class="text-slate-400">Puertas Balizadas:</span> <span class="font-bold text-sky-300">${gates}/3 SUPERADAS</span></div>
+                            <div class="flex justify-between"><span class="text-slate-400">Límite Portuario:</span> <span class="font-bold text-slate-200">&le; 12.0 kn</span></div>
+                            <div class="flex justify-between"><span class="text-slate-400">Vel. USV (u):</span> <span class="font-bold text-emerald-400">${s.u.toFixed(1)} m/s (${(s.u * 1.94384).toFixed(1)} kn)</span></div>
+                            <div class="mt-1 text-center text-emerald-400 font-bold bg-emerald-950/60 p-0.5 rounded border border-emerald-800 text-[8px]">
+                                🟢 AMARRAS A BORDO · GOBIERNO LIBRE
+                            </div>
+                        </div>
+                    `}
+                `;
             } else {
                 const tName = (s.target && s.target.name) || "BLANCO";
                 const tDist = (s.target && s.target.distance) || 0;
@@ -5429,6 +5528,10 @@ class Water extends Mesh {
                         window.repairShip();
                     };
                 }
+            } else if (s.mission_id === 6 && s.mooring && s.mooring.fast) {
+                banner.className = "absolute bottom-3 left-1/2 -translate-x-1/2 bg-amber-950/95 border-2 border-amber-500 text-amber-200 px-4 py-2 rounded-2xl text-xs font-black shadow-2xl z-20 pointer-events-auto flex items-center gap-3";
+                banner.innerHTML = "<span>⚓ AMARRAS DADAS AL MUELLE DK-01 · PROTOCOLO LA GUAIRA</span> <button onclick='castOffMooringLines()' class='bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 px-3 py-1 rounded-lg text-xs font-extrabold border border-amber-300 transition cursor-pointer shadow flex items-center gap-1'><span>⚡</span> <span>LARGAR AMARRAS [L]</span></button>";
+                banner.classList.remove('hidden');
             } else if (s.mode === "TERMINAL_APN" && !s.detonated) {
                 banner.className = "absolute bottom-3 left-1/2 -translate-x-1/2 bg-rose-950/95 border-2 border-rose-500 text-rose-200 px-4 py-1.5 rounded-full text-xs font-black animate-pulse shadow-2xl z-20 pointer-events-none flex items-center gap-2";
                 banner.innerHTML = "<span>🚀 INTERCEPCIÓN TÁCTICA AUTÓNOMA (APN COLISIÓN · 60+ KN)</span> <span class='bg-rose-900 text-rose-200 px-2 py-0.5 rounded text-[10px] border border-rose-400 font-bold'>[M] CANCELAR</span>";
@@ -6441,6 +6544,12 @@ class Water extends Mesh {
             if (k === '3') { selectMission(3); return; }
             if (k === '4') { selectMission(4); return; }
             if (k === '5') { selectMission(5); return; }
+            if (k === '6') { selectMission(6); return; }
+            if (k === '7') { selectMission(7); return; }
+            if (k === '8') { selectMission(8); return; }
+            if (k === '9') { selectMission(9); return; }
+            if (k === '0') { selectMission(10); return; }
+            if (k === 'l') { castOffMooringLines(); return; }
             if (k === 'm') { cancelAutonomy(); return; }
             if (k === 'o') { toggleSeaMode(); return; }
             if (k === 'h') { toggleWireframe(); return; }
@@ -6598,6 +6707,110 @@ class Water extends Mesh {
                 noiseSource.stop(now + 3.4);
             } catch (err) {}
         }
+
+        // Gestión Acústica y Vocal de Amarras (Protocolo La Guaira M1)
+        function playMooringReleaseSound() {
+            if (!audioCtx) initNavalAudio();
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            try {
+                const now = audioCtx.currentTime;
+                // Silbato contramaestre de maniobra (Bosun Pipe naval)
+                const osc = audioCtx.createOscillator();
+                const oscGain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1950, now);
+                osc.frequency.exponentialRampToValueAtTime(2600, now + 0.15);
+                osc.frequency.linearRampToValueAtTime(2200, now + 0.38);
+                oscGain.gain.setValueAtTime(0.25, now);
+                oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+                osc.connect(oscGain);
+                oscGain.connect(masterGain || audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.48);
+
+                // Caída y chapoteo de cabo en el agua
+                setTimeout(() => {
+                    playHullSlamSound(0.45);
+                }, 280);
+            } catch (err) {}
+        }
+
+        function playMooringTensionSound() {
+            if (!audioCtx) initNavalAudio();
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            try {
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(320, now);
+                osc.frequency.linearRampToValueAtTime(140, now + 0.25);
+                gain.gain.setValueAtTime(0.18, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+                osc.connect(gain);
+                gain.connect(masterGain || audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.35);
+            } catch (err) {}
+        }
+
+        function announceTacticalVoice(text) {
+            if ('speechSynthesis' in window) {
+                try {
+                    window.speechSynthesis.cancel();
+                    const u = new SpeechSynthesisUtterance(text);
+                    u.lang = 'es-ES';
+                    u.rate = 1.05;
+                    u.pitch = 0.95;
+                    window.speechSynthesis.speak(u);
+                } catch (e) {}
+            }
+        }
+
+        let lastMooringAlertTime = 0;
+        function notifyMooringFastAlert() {
+            const now = performance.now();
+            if (now - lastMooringAlertTime < 2800) return;
+            lastMooringAlertTime = now;
+            playMooringTensionSound();
+            announceTacticalVoice("Atención. Amarras dadas al muelle. Debe soltar amarras antes de dar máquina.");
+            const banner = document.getElementById('statusAlertBanner');
+            if (banner) {
+                banner.className = "absolute bottom-3 left-1/2 -translate-x-1/2 bg-amber-950/95 border-2 border-amber-500 text-amber-200 px-5 py-2 rounded-2xl text-xs font-black shadow-2xl z-20 pointer-events-auto flex items-center gap-3 animate-pulse";
+                banner.innerHTML = "<span>⚠️ ¡ATENCIÓN! AMARRAS FIRMES AL MUELLE · LARGUE AMARRAS [L] PARA ZARPAR</span> <button onclick='castOffMooringLines()' class='bg-amber-600 hover:bg-amber-500 active:scale-95 text-slate-950 px-2.5 py-0.5 rounded text-[10px] font-bold border border-amber-300 transition cursor-pointer'>⚡ LARGAR AMARRAS [L]</button>";
+                banner.classList.remove('hidden');
+            }
+        }
+
+        function castOffMooringLines() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ release_mooring: true, line: 'ALL' }));
+            }
+            if (currentState.mooring) {
+                currentState.mooring.fast = false;
+                currentState.mooring.bow = false;
+                currentState.mooring.spring = false;
+                currentState.mooring.stern = false;
+                currentState.mooring.tension_pct = 0.0;
+            }
+            playMooringReleaseSound();
+            announceTacticalVoice("Amarras largadas y a bordo. Buque libre.");
+            if (typeof mooringRopesGroup !== 'undefined') {
+                mooringRopesGroup.visible = false;
+            }
+            const banner = document.getElementById('statusAlertBanner');
+            if (banner) {
+                banner.className = "absolute bottom-3 left-1/2 -translate-x-1/2 bg-emerald-950/95 border-2 border-emerald-500 text-emerald-200 px-5 py-2 rounded-2xl text-xs font-black shadow-2xl z-20 pointer-events-none flex items-center gap-2 animate-bounce";
+                banner.innerHTML = "<span>🟢 ¡AMARRAS LARGADAS Y A BORDO! BUQUE LIBRE PARA CIABOGA Y SALIDA A CANAL</span>";
+                banner.classList.remove('hidden');
+                setTimeout(() => {
+                    banner.classList.add('hidden');
+                }, 4500);
+            }
+        }
+        window.castOffMooringLines = castOffMooringLines;
 
         // 2. Sistema de Gotas en Pantalla (Screen Drops Overlay)
         const screenDropsCanvas = document.getElementById('screenDropsCanvas');
@@ -7796,6 +8009,42 @@ class Water extends Mesh {
                     buoy.position.y = bEta;
                     buoy.rotation.z = Math.sin(simTime * 2.0 + buoy.position.z * 0.01) * 0.06;
                 });
+            }
+
+            // M6: Dinámica de Amarras 3D al Muelle DK-01 (Protocolo La Guaira)
+            if (typeof mooringRopesGroup !== 'undefined' && ship && typeof updateMooringLine === 'function') {
+                const isMoored = !!(currentState.mooring && currentState.mooring.fast);
+                mooringRopesGroup.visible = isMoored;
+                if (isMoored) {
+                    const sX = ship.position.x;
+                    const sY = ship.position.y + 0.85;
+                    const sZ = ship.position.z;
+
+                    // 1. Largo de Proa (a noray norte N-01)
+                    updateMooringLine(
+                        mooringRopes.bow,
+                        new THREE.Vector3(sX - 0.65, sY, sZ - 4.6),
+                        new THREE.Vector3(145.6, 2.7, 208.0)
+                    );
+                    // 2. Spring de Proa (proa hacia noray central N-02)
+                    updateMooringLine(
+                        mooringRopes.springFwd,
+                        new THREE.Vector3(sX - 0.65, sY, sZ - 2.8),
+                        new THREE.Vector3(145.6, 2.7, 226.0)
+                    );
+                    // 3. Spring de Popa (popa hacia noray central N-03)
+                    updateMooringLine(
+                        mooringRopes.springAft,
+                        new THREE.Vector3(sX - 0.65, sY, sZ + 2.8),
+                        new THREE.Vector3(145.6, 2.7, 214.0)
+                    );
+                    // 4. Largo de Popa (a noray sur N-04)
+                    updateMooringLine(
+                        mooringRopes.stern,
+                        new THREE.Vector3(sX - 0.65, sY, sZ + 4.6),
+                        new THREE.Vector3(145.6, 2.7, 232.0)
+                    );
+                }
             }
 
             // 4B. Tráfico Marítimo Mercante Autónomo (COLREGS)
