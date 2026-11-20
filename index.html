@@ -3480,91 +3480,464 @@ class Water extends Mesh {
         }
 
         /* -------------------------------------------------------------------------
-           7.2. SISTEMA DE SALPICADURAS VOLUMÉTRICAS 3D (Bow Spray & Rooster Tail)
+           7.2. MOTOR HIDRODINÁMICO MULTI-BUQUE: ESTELAS KELVIN, ESPUMA Y ROTURA DEL AGUA
+           Adaptado a las dimensiones reales de cada tipo de buque y USV (Estilo La Guaira HD)
            ------------------------------------------------------------------------- */
-        const SPRAY_COUNT = isMobile ? 24 : 48;
-        const sprayGeo = new THREE.BufferGeometry();
-        const sprayPos = new Float32Array(SPRAY_COUNT * 3);
-        const sprayVel = new Float32Array(SPRAY_COUNT * 3);
-        const sprayLife = new Float32Array(SPRAY_COUNT);
-
-        for (let i = 0; i < SPRAY_COUNT; i++) {
-            sprayPos[i * 3]     = 0;
-            sprayPos[i * 3 + 1] = -100;
-            sprayPos[i * 3 + 2] = 0;
-            sprayLife[i] = 0;
+        function canvasTex(w, h, drawFn, mip = true) {
+            const cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            const ctx = cv.getContext('2d');
+            drawFn(ctx, w, h);
+            const tex = new THREE.CanvasTexture(cv);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            if (!mip) tex.generateMipmaps = false;
+            return tex;
         }
 
-        sprayGeo.setAttribute('position', new THREE.BufferAttribute(sprayPos, 3));
+        // Textura 1: Vetas de espuma y placas turbulentas para la cinta de estela en V
+        const wakeTex = canvasTex(1024, 512, (g, w, h) => {
+            g.clearRect(0, 0, w, h);
+            for (let i = 0; i < 560; i++) {
+                const u = Math.random();
+                const y = 256 + (Math.random() - 0.5) * 416 * (0.32 + u * 0.68);
+                const len = 32 + Math.random() * 184;
+                g.strokeStyle = 'rgba(255,255,255,' + (0.05 + Math.random() * 0.15).toFixed(3) + ')';
+                g.lineWidth = 2.4 + Math.random() * 7.2;
+                g.beginPath();
+                g.moveTo(u * 1024 - len * 0.5, y);
+                g.quadraticCurveTo(u * 1024, y + (Math.random() - 0.5) * 24, u * 1024 + len * 0.5, y + (Math.random() - 0.5) * 32);
+                g.stroke();
+            }
+            for (let i = 0; i < 400; i++) {
+                const u = Math.random(), y = 256 + (Math.random() - 0.5) * 428;
+                g.fillStyle = 'rgba(255,255,255,' + (0.04 + Math.random() * 0.12).toFixed(3) + ')';
+                g.beginPath();
+                g.ellipse(u * 1024, y, 12 + Math.random() * 60, 2.8 + Math.random() * 8.4, 0, 0, Math.PI * 2);
+                g.fill();
+            }
+            const gv = g.createLinearGradient(0, 0, 0, 512);
+            gv.addColorStop(0, 'rgba(0,0,0,0)');
+            gv.addColorStop(0.16, 'rgba(0,0,0,1)');
+            gv.addColorStop(0.84, 'rgba(0,0,0,1)');
+            gv.addColorStop(1, 'rgba(0,0,0,0)');
+            g.globalCompositeOperation = 'destination-in';
+            g.fillStyle = gv;
+            g.fillRect(0, 0, 1024, 512);
+        }, false);
+
+        // Textura 2: Remolino de cavitación y burbujas de propulsión de popa
+        const sternFoamTex = canvasTex(512, 320, (g, w, h) => {
+            g.clearRect(0, 0, w, h);
+            const gr = g.createRadialGradient(256, 68, 12, 256, 124, 236);
+            gr.addColorStop(0, 'rgba(255,255,255,.90)');
+            gr.addColorStop(0.45, 'rgba(232,244,250,.48)');
+            gr.addColorStop(1, 'rgba(255,255,255,0)');
+            g.fillStyle = gr;
+            g.fillRect(0, 0, w, h);
+            for (let i = 0; i < 480; i++) {
+                const x = Math.random() * 512, y = 60 + Math.random() * 256;
+                const r = 4 + Math.random() * 26 * (y / 320);
+                g.fillStyle = 'rgba(255,255,255,' + (0.05 + Math.random() * 0.16).toFixed(3) + ')';
+                g.beginPath();
+                g.ellipse(x, y, r, r * 0.45, 0, 0, Math.PI * 2);
+                g.fill();
+            }
+        }, false);
+
+        // Textura 3: Punto radial suave para gotas de roción y salpicadura
+        const sprayDotTex = canvasTex(64, 64, (g) => {
+            const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+            gr.addColorStop(0, 'rgba(255,255,255,1.0)');
+            gr.addColorStop(0.35, 'rgba(240,250,255,0.75)');
+            gr.addColorStop(0.8, 'rgba(220,245,255,0.20)');
+            gr.addColorStop(1, 'rgba(255,255,255,0)');
+            g.fillStyle = gr;
+            g.fillRect(0, 0, 64, 64);
+        }, false);
+
+        // Perfiles Hidrodinámicos calibrados según las dimensiones de cada buque/USV
+        const VESSEL_HYDRO_PROFILES = {
+            usv: {
+                type: 'usv',
+                name: 'USV Stealth Interceptor',
+                bowZ: 5.8, sternZ: -5.8, beam: 3.4, draftOffset: 0.12, maxSpeed: 22.0,
+                wakeSegments: 64, wakeWidthBase: 1.8, wakeWidthMax: 14.0, wakeSpread: 0.075, wakeMaxDist: 140.0,
+                sternFoamW: 3.8, sternFoamL: 6.2,
+                sprayVelLat: 4.8, sprayVelUp: 2.2, sprayLife: 0.55, sprayRate: 3
+            },
+            seababy: {
+                type: 'seababy',
+                name: 'Sea Baby Drone',
+                bowZ: 3.1, sternZ: -3.1, beam: 1.8, draftOffset: 0.08, maxSpeed: 24.0,
+                wakeSegments: 48, wakeWidthBase: 1.1, wakeWidthMax: 9.0, wakeSpread: 0.060, wakeMaxDist: 85.0,
+                sternFoamW: 2.2, sternFoamL: 4.2,
+                sprayVelLat: 3.6, sprayVelUp: 1.6, sprayLife: 0.45, sprayRate: 2
+            },
+            korsar: {
+                type: 'korsar',
+                name: 'Corbeta Korsar',
+                bowZ: 31.0, sternZ: -31.0, beam: 11.2, draftOffset: 0.25, maxSpeed: 16.0,
+                wakeSegments: 80, wakeWidthBase: 6.8, wakeWidthMax: 48.0, wakeSpread: 0.12, wakeMaxDist: 380.0,
+                sternFoamW: 11.5, sternFoamL: 18.0,
+                sprayVelLat: 7.2, sprayVelUp: 4.5, sprayLife: 0.90, sprayRate: 5
+            },
+            patrol: {
+                type: 'patrol',
+                name: 'Patrullero PN-41',
+                bowZ: 14.0, sternZ: -14.0, beam: 5.6, draftOffset: 0.18, maxSpeed: 14.0,
+                wakeSegments: 64, wakeWidthBase: 3.2, wakeWidthMax: 24.0, wakeSpread: 0.085, wakeMaxDist: 220.0,
+                sternFoamW: 5.8, sternFoamL: 9.2,
+                sprayVelLat: 5.4, sprayVelUp: 3.0, sprayLife: 0.70, sprayRate: 4
+            },
+            merchant: {
+                type: 'merchant',
+                name: 'M/V Atlantic Trader',
+                bowZ: 65.6, sternZ: -65.6, beam: 19.6, draftOffset: 0.35, maxSpeed: 8.5,
+                wakeSegments: 96, wakeWidthBase: 13.5, wakeWidthMax: 95.0, wakeSpread: 0.14, wakeMaxDist: 550.0,
+                sternFoamW: 20.0, sternFoamL: 30.0,
+                sprayVelLat: 4.2, sprayVelUp: 2.2, sprayLife: 1.2, sprayRate: 4
+            },
+            lng: {
+                type: 'lng',
+                name: 'Pacific Voyager LNG',
+                bowZ: 105.0, sternZ: -105.0, beam: 32.0, draftOffset: 0.40, maxSpeed: 7.5,
+                wakeSegments: 96, wakeWidthBase: 22.0, wakeWidthMax: 130.0, wakeSpread: 0.15, wakeMaxDist: 700.0,
+                sternFoamW: 28.0, sternFoamL: 42.0,
+                sprayVelLat: 4.5, sprayVelUp: 2.4, sprayLife: 1.4, sprayRate: 5
+            },
+            swarm: {
+                type: 'swarm',
+                name: 'Swarm USV-02',
+                bowZ: 5.8, sternZ: -5.8, beam: 3.4, draftOffset: 0.12, maxSpeed: 22.0,
+                wakeSegments: 64, wakeWidthBase: 1.8, wakeWidthMax: 14.0, wakeSpread: 0.075, wakeMaxDist: 140.0,
+                sternFoamW: 3.8, sternFoamL: 6.2,
+                sprayVelLat: 4.8, sprayVelUp: 2.2, sprayLife: 0.55, sprayRate: 3
+            },
+            carrier: {
+                type: 'carrier',
+                name: 'Portaaviones CVN',
+                bowZ: 165.0, sternZ: -165.0, beam: 78.0, draftOffset: 0.50, maxSpeed: 15.0,
+                wakeSegments: 96, wakeWidthBase: 36.0, wakeWidthMax: 180.0, wakeSpread: 0.16, wakeMaxDist: 900.0,
+                sternFoamW: 45.0, sternFoamL: 60.0,
+                sprayVelLat: 5.5, sprayVelUp: 3.0, sprayLife: 1.5, sprayRate: 5
+            }
+        };
+
+        function createHydrodynamicWakeMaterial() {
+            return new THREE.ShaderMaterial({
+                uniforms: {
+                    uTex: { value: wakeTex },
+                    uTime: { value: 0.0 },
+                    uOp: { value: 0.0 }
+                },
+                transparent: true,
+                depthWrite: false,
+                side: THREE.DoubleSide,
+                vertexShader: `
+                    attribute float aAge;
+                    attribute float aDist;
+                    varying vec2 vUv;
+                    varying float vAge;
+                    varying float vDist;
+                    void main() {
+                        vUv = uv;
+                        vAge = aAge;
+                        vDist = aDist;
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D uTex;
+                    uniform float uTime;
+                    uniform float uOp;
+                    varying vec2 vUv;
+                    varying float vAge;
+                    varying float vDist;
+
+                    void main() {
+                        float c = abs(vUv.y - 0.5) * 2.0;
+                        float along = vAge;
+
+                        // 1. Núcleo turbulento animado
+                        float churn = texture2D(uTex, vec2(vUv.x * 1.7 - uTime * 0.26, vUv.y * 0.92 + 0.04)).a;
+                        float turb = smoothstep(0.50, 0.03, along) * (0.40 + 0.60 * churn) *
+                                     (0.86 + 0.14 * sin(uTime * 9.0 + vDist * 1.4)) * 0.85;
+
+                        // 2. Ondas divergentes en V (Ángulo de Kelvin)
+                        float edge = smoothstep(0.56, 0.92, c) * smoothstep(1.06, 0.84, c);
+                        float vwave = pow(0.5 + 0.5 * sin(vDist * 0.50 - uTime * 2.8 + c * 2.4), 4.0) * edge;
+                        vwave *= smoothstep(0.05, 0.30, along) * (1.0 - smoothstep(0.72, 1.0, along));
+
+                        // 3. Cuerpo de espuma disipativo
+                        float body = texture2D(uTex, vec2(vUv.x * 2.6 - uTime * 0.045, vUv.y)).a;
+                        body *= smoothstep(1.02, 0.58, along) * (0.30 + 0.70 * smoothstep(0.0, 0.55, c));
+
+                        float a = (turb * 1.05 + vwave * 0.60 + body * 0.72) * uOp;
+                        a += smoothstep(0.16, 0.0, along) * 0.45 * uOp; // blanqueamiento intenso en el espejo de popa
+                        a *= smoothstep(1.02, 0.35, c); // bordes plumeados
+
+                        if (a < 0.012) discard;
+                        gl_FragColor = vec4(0.97, 0.985, 1.0, clamp(a, 0.0, 1.0));
+                        #include <tonemapping_fragment>
+                        #include <colorspace_fragment>
+                    }
+                `
+            });
+        }
+
+        function createVesselWakeMesh(numSegments = 64) {
+            const geo = new THREE.BufferGeometry();
+            const pos = new Float32Array(numSegments * 2 * 3);
+            const age = new Float32Array(numSegments * 2);
+            const dist = new Float32Array(numSegments * 2);
+            const uvs = new Float32Array(numSegments * 2 * 2);
+
+            for (let i = 0; i < numSegments; i++) {
+                const u = i / (numSegments - 1);
+                const q = i * 4;
+                uvs[q] = u;     uvs[q + 1] = 0;
+                uvs[q + 2] = u; uvs[q + 3] = 1;
+            }
+
+            const indices = [];
+            for (let i = 0; i < numSegments - 1; i++) {
+                const a = i * 2;
+                indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+            }
+
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            geo.setAttribute('aAge', new THREE.BufferAttribute(age, 1));
+            geo.setAttribute('aDist', new THREE.BufferAttribute(dist, 1));
+            geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+            geo.setIndex(indices);
+
+            const mat = createHydrodynamicWakeMaterial();
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.frustumCulled = false;
+            mesh.renderOrder = 4;
+            return mesh;
+        }
+
+        function createSternFoamMesh(width, length) {
+            const geo = new THREE.PlaneGeometry(width, length);
+            geo.rotateX(-Math.PI / 2);
+            const mat = new THREE.MeshBasicMaterial({
+                map: sternFoamTex,
+                transparent: true,
+                opacity: 0.0,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.frustumCulled = false;
+            mesh.renderOrder = 4;
+            return mesh;
+        }
+
+        // Clase administradora de la estela hidrodinámica por buque
+        class VesselHydrodynamicWake {
+            constructor(profileKey) {
+                this.profile = VESSEL_HYDRO_PROFILES[profileKey] || VESSEL_HYDRO_PROFILES.usv;
+                this.trail = [];
+                this.maxTrailPoints = this.profile.wakeSegments;
+                this.mesh = createVesselWakeMesh(this.profile.wakeSegments);
+                scene.add(this.mesh);
+
+                this.sternFoam = createSternFoamMesh(this.profile.sternFoamW, this.profile.sternFoamL);
+                scene.add(this.sternFoam);
+
+                this.lastSampleX = null;
+                this.lastSampleZ = null;
+            }
+
+            setProfile(profileKey) {
+                if (!VESSEL_HYDRO_PROFILES[profileKey]) return;
+                const newProf = VESSEL_HYDRO_PROFILES[profileKey];
+                if (this.profile.type === newProf.type) return;
+                this.profile = newProf;
+                this.trail = [];
+                this.lastSampleX = null;
+                this.lastSampleZ = null;
+
+                if (this.sternFoam) {
+                    this.sternFoam.geometry.dispose();
+                    this.sternFoam.geometry = new THREE.PlaneGeometry(this.profile.sternFoamW, this.profile.sternFoamL).rotateX(-Math.PI / 2);
+                }
+            }
+
+            update(posX, posZ, heading, speed, dt) {
+                const sternDist = this.profile.sternZ;
+                const sx = posX + Math.sin(heading) * sternDist;
+                const sz = posZ + Math.cos(heading) * sternDist;
+                const sy = waveElevation(sx, sz, simTime) + 0.08;
+
+                // 1. Espuma de cavitación de popa
+                if (this.sternFoam) {
+                    this.sternFoam.position.set(sx, sy + 0.03, sz);
+                    this.sternFoam.rotation.order = 'YXZ';
+                    this.sternFoam.rotation.y = heading;
+                    const fOp = (speed > 0.4) ? Math.min(0.92, (speed / (this.profile.maxSpeed * 0.65)) * 0.90) : 0;
+                    this.sternFoam.material.opacity = fOp;
+                    this.sternFoam.visible = (fOp > 0.01);
+                    const boilPulse = 1.0 + 0.10 * Math.sin(simTime * 12.0);
+                    this.sternFoam.scale.set(boilPulse, 1.0, boilPulse);
+                }
+
+                // 2. Acumulación de puntos del camino de estela
+                if (this.lastSampleX === null) {
+                    this.lastSampleX = sx;
+                    this.lastSampleZ = sz;
+                    this.trail.push({ x: sx, z: sz, h: heading });
+                } else {
+                    const dMove = Math.hypot(sx - this.lastSampleX, sz - this.lastSampleZ);
+                    const minStep = (this.profile.type === 'merchant' || this.profile.type === 'lng' || this.profile.type === 'carrier') ? 2.2 : 0.55;
+                    if (dMove >= minStep) {
+                        this.trail.push({ x: sx, z: sz, h: heading });
+                        this.lastSampleX = sx;
+                        this.lastSampleZ = sz;
+                        if (this.trail.length > this.maxTrailPoints) {
+                            this.trail.shift();
+                        }
+                    }
+                }
+
+                // 3. Reconstrucción de la cinta de estela Kelvin que cabalga el oleaje
+                const posAttr = this.mesh.geometry.attributes.position;
+                const ageAttr = this.mesh.geometry.attributes.aAge;
+                const distAttr = this.mesh.geometry.attributes.aDist;
+                const pos = posAttr.array;
+                const age = ageAttr.array;
+                const distArr = distAttr.array;
+                const n = this.trail.length;
+
+                let accumDist = 0;
+                for (let i = 0; i < this.maxTrailPoints; i++) {
+                    const j = i * 6;
+                    const q = i * 2;
+                    if (i < n) {
+                        const p = this.trail[n - 1 - i];
+                        if (i > 0) {
+                            const prev = this.trail[n - i];
+                            accumDist += Math.hypot(p.x - prev.x, p.z - prev.z);
+                        }
+                        const w = Math.min(this.profile.wakeWidthMax, this.profile.wakeWidthBase + this.profile.wakeSpread * accumDist);
+                        const nx = Math.cos(p.h);
+                        const nz = -Math.sin(p.h);
+                        const wy = waveElevation(p.x, p.z, simTime) + 0.07;
+
+                        pos[j]     = p.x + nx * w; pos[j + 1] = wy; pos[j + 2] = p.z + nz * w;
+                        pos[j + 3] = p.x - nx * w; pos[j + 4] = wy; pos[j + 5] = p.z - nz * w;
+
+                        const aNorm = Math.min(1.0, accumDist / this.profile.wakeMaxDist);
+                        age[q] = aNorm;     age[q + 1] = aNorm;
+                        distArr[q] = accumDist; distArr[q + 1] = accumDist;
+                    } else {
+                        pos[j + 1] = -100;
+                        pos[j + 4] = -100;
+                        age[q] = 1.0; age[q + 1] = 1.0;
+                        distArr[q] = 999; distArr[q + 1] = 999;
+                    }
+                }
+                posAttr.needsUpdate = true;
+                ageAttr.needsUpdate = true;
+                distAttr.needsUpdate = true;
+
+                this.mesh.material.uniforms.uTime.value = simTime;
+                const wakeOp = (speed > 0.4) ? Math.min(0.82, (speed / (this.profile.maxSpeed * 0.50)) * 0.82) : 0;
+                this.mesh.material.uniforms.uOp.value = wakeOp;
+                this.mesh.visible = (wakeOp > 0.01);
+            }
+
+            setVisible(visible) {
+                if (this.mesh) this.mesh.visible = visible;
+                if (this.sternFoam) this.sternFoam.visible = visible;
+            }
+        }
+
+        // Instancias de estela hidrodinámica para cada buque del simulador
+        const playerHydroWake   = new VesselHydrodynamicWake('usv');
+        const targetHydroWake   = new VesselHydrodynamicWake('patrol');
+        const swarmHydroWake    = new VesselHydrodynamicWake('swarm');
+        const merchantHydroWake = new VesselHydrodynamicWake('merchant');
+        const lngHydroWake      = new VesselHydrodynamicWake('lng');
+        const carrierHydroWake  = new VesselHydrodynamicWake('carrier');
+
+        // Sistema Global de Rompiente y Roción de Proa (Bow Spray Particles)
+        const TOTAL_SPRAY_COUNT = isMobile ? 160 : 360;
+        const sprayGeo = new THREE.BufferGeometry();
+        const sprayPosArr = new Float32Array(TOTAL_SPRAY_COUNT * 3);
+        const sprayVelArr = new Float32Array(TOTAL_SPRAY_COUNT * 3);
+        const sprayLifeArr = new Float32Array(TOTAL_SPRAY_COUNT);
+
+        for (let i = 0; i < TOTAL_SPRAY_COUNT; i++) {
+            sprayPosArr[i * 3 + 1] = -100;
+            sprayLifeArr[i] = 0;
+        }
+
+        sprayGeo.setAttribute('position', new THREE.BufferAttribute(sprayPosArr, 3));
         const sprayParticlesMat = new THREE.PointsMaterial({
             color: 0xffffff,
-            size: isMobile ? 3.5 : 4.5,
+            size: isMobile ? 4.2 : 5.8,
+            map: sprayDotTex,
             transparent: true,
-            opacity: 0.70,
+            opacity: 0.85,
             blending: THREE.AdditiveBlending,
             depthWrite: false
         });
         const sprayPoints = new THREE.Points(sprayGeo, sprayParticlesMat);
         scene.add(sprayPoints);
 
-        let spraySpawnIdx = 0;
-        function updateSprayParticles(dt, usvX, usvY, usvZ, usvSpeed, heading) {
-            const pos = sprayGeo.attributes.position;
-            const nowSpeed = Math.max(0, usvSpeed);
+        let globalSprayIdx = 0;
+        function emitVesselBowSpray(profile, posX, posZ, heading, speed) {
+            if (speed < 1.2) return;
+            const numDrops = Math.min(profile.sprayRate, Math.floor(speed * 0.38) + 1);
+            const bx = posX + Math.sin(heading) * profile.bowZ;
+            const bz = posZ + Math.cos(heading) * profile.bowZ;
+            const by = waveElevation(bx, bz, simTime) + profile.draftOffset;
 
-            if (nowSpeed > 1.8) {
-                const spawnBatch = Math.min(3, Math.floor(nowSpeed * 0.35));
-                for (let b = 0; b < spawnBatch; b++) {
-                    const idx = spraySpawnIdx;
-                    spraySpawnIdx = (spraySpawnIdx + 1) % SPRAY_COUNT;
+            for (let d = 0; d < numDrops; d++) {
+                const side = (Math.random() > 0.5 ? 1.0 : -1.0);
+                const idx = globalSprayIdx;
+                globalSprayIdx = (globalSprayIdx + 1) % TOTAL_SPRAY_COUNT;
 
-                    const isBow = (Math.random() > 0.40);
-                    if (isBow) {
-                        const side = (Math.random() > 0.5 ? 1.0 : -1.0);
-                        const forwardDist = 2.4 + Math.random() * 0.8;
-                        const latDist = side * (0.8 + Math.random() * 0.5);
-                        const sx = usvX + Math.sin(heading) * forwardDist + Math.cos(heading) * latDist;
-                        const sz = usvZ + Math.cos(heading) * forwardDist - Math.sin(heading) * latDist;
+                const latOffset = side * (profile.beam * 0.38 + Math.random() * (profile.beam * 0.16));
+                const px = bx + Math.cos(heading) * latOffset;
+                const pz = bz - Math.sin(heading) * latOffset;
 
-                        pos.setXYZ(idx, sx, usvY + 0.15, sz);
-                        sprayVel[idx * 3]     = Math.cos(heading) * side * (2.0 + Math.random() * 3.0) - Math.sin(heading) * (nowSpeed * 0.4);
-                        sprayVel[idx * 3 + 1] = 1.2 + Math.random() * 2.2;
-                        sprayVel[idx * 3 + 2] = -Math.sin(heading) * side * (2.0 + Math.random() * 3.0) - Math.cos(heading) * (nowSpeed * 0.4);
-                        sprayLife[idx] = 0.55 + Math.random() * 0.35;
-                    } else {
-                        const sternDist = -3.2 - Math.random() * 0.8;
-                        const spread = (Math.random() - 0.5) * 0.6;
-                        const sx = usvX + Math.sin(heading) * sternDist + Math.cos(heading) * spread;
-                        const sz = usvZ + Math.cos(heading) * sternDist - Math.sin(heading) * spread;
+                sprayPosArr[idx * 3]     = px;
+                sprayPosArr[idx * 3 + 1] = by + 0.15;
+                sprayPosArr[idx * 3 + 2] = pz;
 
-                        pos.setXYZ(idx, sx, usvY + 0.2, sz);
-                        sprayVel[idx * 3]     = -Math.sin(heading) * (nowSpeed * 0.85 + 2.0) + (Math.random() - 0.5) * 1.5;
-                        sprayVel[idx * 3 + 1] = 1.5 + (nowSpeed / 15.0) * 3.0 + Math.random() * 1.5;
-                        sprayVel[idx * 3 + 2] = -Math.cos(heading) * (nowSpeed * 0.85 + 2.0) + (Math.random() - 0.5) * 1.5;
-                        sprayLife[idx] = 0.60 + Math.random() * 0.40;
-                    }
-                }
+                const spdRatio = Math.min(1.5, speed / profile.maxSpeed);
+                sprayVelArr[idx * 3]     = Math.cos(heading) * side * (profile.sprayVelLat * (0.8 + 0.4 * Math.random())) - Math.sin(heading) * (speed * 0.30);
+                sprayVelArr[idx * 3 + 1] = profile.sprayVelUp * (0.6 + 0.7 * spdRatio) + Math.random() * 1.6;
+                sprayVelArr[idx * 3 + 2] = -Math.sin(heading) * side * (profile.sprayVelLat * (0.8 + 0.4 * Math.random())) - Math.cos(heading) * (speed * 0.30);
+                sprayLifeArr[idx] = profile.sprayLife * (0.8 + 0.4 * Math.random());
             }
+        }
 
-            for (let i = 0; i < SPRAY_COUNT; i++) {
-                if (sprayLife[i] > 0) {
-                    sprayLife[i] -= dt;
-                    let px = pos.getX(i) + sprayVel[i * 3] * dt;
-                    let py = pos.getY(i) + sprayVel[i * 3 + 1] * dt;
-                    let pz = pos.getZ(i) + sprayVel[i * 3 + 2] * dt;
-                    sprayVel[i * 3 + 1] -= 9.8 * dt;
+        function updateMultiVesselHydrodynamics(dt) {
+            // 1. Integración física de partículas de roción (Gravedad y colisión con oleaje)
+            const posAttr = sprayGeo.attributes.position;
+            for (let i = 0; i < TOTAL_SPRAY_COUNT; i++) {
+                if (sprayLifeArr[i] > 0) {
+                    sprayLifeArr[i] -= dt;
+                    let px = posAttr.getX(i) + sprayVelArr[i * 3] * dt;
+                    let py = posAttr.getY(i) + sprayVelArr[i * 3 + 1] * dt;
+                    let pz = posAttr.getZ(i) + sprayVelArr[i * 3 + 2] * dt;
+                    sprayVelArr[i * 3 + 1] -= 9.8 * dt;
 
-                    // Optimización: Plano medio del mar en y ~ 0.0m (evita 24 armónicos por partícula cada frame)
-                    if (py < 0.05) {
-                        sprayLife[i] = 0;
+                    const seaY = waveElevation(px, pz, simTime);
+                    if (py < seaY + 0.06) {
+                        sprayLifeArr[i] = 0;
                         py = -100;
                     }
-                    pos.setXYZ(i, px, py, pz);
+                    posAttr.setXYZ(i, px, py, pz);
                 } else {
-                    pos.setY(i, -100);
+                    posAttr.setY(i, -100);
                 }
             }
-            pos.needsUpdate = true;
+            posAttr.needsUpdate = true;
         }
 
         /* -------------------------------------------------------------------------
@@ -5842,8 +6215,15 @@ class Water extends Mesh {
                 }
             }
 
-            // Salpicaduras Volumétricas 3D (Bow Spray & Rooster Tail)
-            updateSprayParticles(dt, usvX, ship ? ship.position.y : 0, usvZ, usvSpeed, ship ? ship.rotation.y : 0);
+            // Sistema Hidrodinámico de Rotura del Agua y Estela Kelvin (La Guaira HD Multi-Buque)
+            if (typeof playerHydroWake !== 'undefined' && playerHydroWake && ship) {
+                playerHydroWake.setProfile(currentShipType);
+                playerHydroWake.update(usvX, usvZ, ship.rotation.y, usvSpeed, dt);
+                emitVesselBowSpray(playerHydroWake.profile, usvX, usvZ, ship.rotation.y, usvSpeed);
+            }
+            if (typeof updateMultiVesselHydrodynamics === 'function') {
+                updateMultiVesselHydrodynamics(dt);
+            }
 
             // Efecto de Daño Catastrófico (Humo Negro Denso y Fuego al quedar Inoperativo)
             const isShipDamaged = !!(currentState.detonated && currentState.impact_stats && currentState.impact_stats.status && currentState.impact_stats.status.includes("COLISIÓN"));
@@ -5911,6 +6291,18 @@ class Water extends Mesh {
                     targetGroup.rotation.y = tHdg;
                     targetGroup.rotation.x = tPitch;
                     targetGroup.rotation.z = (t.sinking ? (t.sink_tilt || 0.2) : 0) + tRoll;
+
+                    if (typeof targetHydroWake !== 'undefined' && targetHydroWake) {
+                        if (!t.detonated && !t.sinking) {
+                            const tSpeed = (t.u || (isStalker ? 11.2 : 7.7));
+                            const tProf = isWarship ? 'korsar' : (isPatrol ? 'patrol' : 'usv');
+                            targetHydroWake.setProfile(tProf);
+                            targetHydroWake.update(tX, tZ, tHdg, tSpeed, dt);
+                            emitVesselBowSpray(targetHydroWake.profile, tX, tZ, tHdg, tSpeed);
+                        } else {
+                            targetHydroWake.setVisible(false);
+                        }
+                    }
                 }
                 document.getElementById('targetStatusText').innerText = `${t.name} (${t.distance ? t.distance.toFixed(0) : '0'} m)`;
             }
@@ -5934,10 +6326,10 @@ class Water extends Mesh {
                 merchantGroup.rotation.z = mRoll;
                 merchantGroup.visible = true;
 
-                if (merchantGroup.userData.wake) {
+                if (typeof merchantHydroWake !== 'undefined' && merchantHydroWake) {
                     const mSpeed = m.u || 5.6;
-                    merchantGroup.userData.wake.material.opacity = Math.min(0.65, (mSpeed / 8.0) * 0.65);
-                    merchantGroup.userData.wake.visible = (mSpeed > 0.5);
+                    merchantHydroWake.update(mX, mZ, mHdg, mSpeed, dt);
+                    emitVesselBowSpray(merchantHydroWake.profile, mX, mZ, mHdg, mSpeed);
                 }
             } else {
                 merchantGroup.visible = false;
@@ -5962,10 +6354,10 @@ class Water extends Mesh {
                 lngGroup.rotation.z = mlRoll;
                 lngGroup.visible = true;
 
-                if (lngGroup.userData.wake) {
+                if (typeof lngHydroWake !== 'undefined' && lngHydroWake) {
                     const mlSpeed = ml.u || 4.8;
-                    lngGroup.userData.wake.material.opacity = Math.min(0.60, (mlSpeed / 7.0) * 0.60);
-                    lngGroup.userData.wake.visible = (mlSpeed > 0.5);
+                    lngHydroWake.update(mlX, mlZ, mlHdg, mlSpeed, dt);
+                    emitVesselBowSpray(lngHydroWake.profile, mlX, mlZ, mlHdg, mlSpeed);
                 }
             }
 
@@ -6003,10 +6395,14 @@ class Water extends Mesh {
                 swarmWingmanGroup.rotation.z = wRoll;
                 swarmWingmanGroup.visible = isSwarmOn || (sw.formation_mode !== "OFF");
 
-                if (swarmWingmanGroup.userData.wake) {
-                    const wSpeed = sw.u || 0;
-                    swarmWingmanGroup.userData.wake.material.opacity = Math.min(0.68, (wSpeed / 18.0) * 0.68);
-                    swarmWingmanGroup.userData.wake.visible = (wSpeed > 1.2 && swarmWingmanGroup.visible);
+                if (typeof swarmHydroWake !== 'undefined' && swarmHydroWake) {
+                    if (swarmWingmanGroup.visible) {
+                        const wSpeed = sw.u || 0;
+                        swarmHydroWake.update(wX, wZ, wHdg, wSpeed, dt);
+                        emitVesselBowSpray(swarmHydroWake.profile, wX, wZ, wHdg, wSpeed);
+                    } else {
+                        swarmHydroWake.setVisible(false);
+                    }
                 }
 
                 // Marcador holográfico 3D en el agua del Slot de Destino del Wingman
