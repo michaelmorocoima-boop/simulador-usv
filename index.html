@@ -29,6 +29,27 @@
         .touch-manipulation { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
         .vision-nvg { filter: contrast(135%) brightness(130%) hue-rotate(60deg) saturate(380%) drop-shadow(0 0 12px rgba(34, 197, 94, 0.4)) !important; }
         .vision-flir { filter: grayscale(100%) invert(95%) contrast(210%) brightness(92%) !important; }
+
+        /* Estilos Profesionales de Consola Táctica Naval */
+        .tactical-glass {
+            background: rgba(3, 7, 18, 0.88);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            box-shadow: 0 10px 25px -5px rgba(2, 6, 23, 0.8), inset 0 0 12px rgba(56, 189, 248, 0.04);
+        }
+        .tactical-dock-btn {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .tactical-dock-btn:hover {
+            transform: translateY(-1px);
+        }
+        .tactical-dock-btn.active {
+            background: rgba(8, 47, 73, 0.9) !important;
+            border-color: rgba(56, 189, 248, 0.85) !important;
+            color: #38bdf8 !important;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.4) !important;
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 flex flex-col fixed inset-0 m-0 p-0 font-mono select-none overflow-hidden touch-manipulation">
@@ -197,7 +218,10 @@
                         <button class="vision-btn px-1.5 py-1 rounded bg-slate-900 border border-slate-700 text-emerald-400 text-[8.5px] font-bold hover:bg-emerald-950" data-vision="nvg">NVG P43</button>
                         <button class="vision-btn px-1.5 py-1 rounded bg-slate-900 border border-slate-700 text-cyan-300 text-[8.5px] font-bold hover:bg-cyan-950" data-vision="flir">FLIR W-H</button>
                     </div>
-                    <div class="text-[9px] text-slate-400 font-bold px-2 py-0.5 border-b border-slate-800 pt-1">PANELES E INSTRUMENTOS</div>
+                    <div class="text-[9px] text-slate-400 font-bold px-2 py-0.5 border-b border-slate-800 pt-1">PANELES E INSTRUMENTOS (GUARDAR / MOSTRAR)</div>
+                    <button id="toggleSidebarMenuBtn" class="w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-cyan-300 font-bold flex justify-between transition text-[10px]">
+                        <span>🕹️ Consola de Mandos C2</span> <span id="sidebarMenuStatusLabel">ON</span>
+                    </button>
                     <button id="toggleCamHudBtn" class="w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-teal-300 font-bold flex justify-between transition text-[10px]">
                         <span>📹 Info Cámara / HUD</span> <span id="camHudStatusLabel">ON</span>
                     </button>
@@ -263,8 +287,12 @@
             </button>
         </nav>
 
-        <!-- Derecha: Acciones Rápidas (Pausar/Play, QR Celular, Reset e Instalar) -->
+        <!-- Derecha: Acciones Rápidas (Pantalla Completa, Pausar/Play, QR Celular, Reset e Instalar) -->
         <div class="flex items-center gap-1.5">
+            <!-- Botón de Pantalla Completa (Full Screen) -->
+            <button id="btnFullScreen" class="bg-slate-900 hover:bg-cyan-950 text-cyan-300 px-2 sm:px-2.5 py-1 rounded-lg border border-cyan-700/70 text-[10px] font-bold transition flex items-center gap-1 shadow cursor-pointer select-none" title="Alternar Pantalla Completa (Tecla K / F11)">
+                <span id="fullscreenIcon">⛶</span> <span id="fullscreenText" class="hidden sm:inline">Pantalla</span>
+            </button>
             <button id="btnPausePlay" class="bg-amber-950/80 hover:bg-amber-900 text-amber-300 px-2 sm:px-2.5 py-1 rounded-lg border border-amber-600/70 text-[10px] font-bold transition flex items-center gap-1 shadow cursor-pointer select-none" title="Pausar / Reanudar Simulación (Tecla P)">
                 <span id="pausePlayIcon">⏸️</span> <span id="pausePlayText">Pausar</span>
             </button>
@@ -312,8 +340,35 @@
                 <!-- Viñeteado Cinemático de Lente Naval -->
                 <div class="absolute inset-0 pointer-events-none z-10 shadow-[inset_0_0_90px_rgba(3,10,24,0.55)]"></div>
 
+                <!-- Dock Táctico Flotante de Control de Paneles y Ventanas (Guardar y Mostrar Pestañas) -->
+                <div id="tacticalPanelsDock" class="absolute top-2 left-1/2 -translate-x-1/2 z-25 flex items-center gap-1 p-1 rounded-xl tactical-glass border border-cyan-500/40 shadow-2xl backdrop-blur-md select-none transition-all">
+                    <span class="text-[9px] font-black text-cyan-400/90 px-1.5 flex items-center gap-1 border-r border-slate-700/60 pr-2">
+                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                        <span class="hidden md:inline tracking-wider">PANELES</span>
+                    </span>
+                    <button id="dockBtnSidebar" class="tactical-dock-btn active px-2 py-0.5 rounded-lg text-[9.5px] font-bold border border-slate-700/60 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/60 flex items-center gap-1 cursor-pointer select-none" title="Guardar / Mostrar Consola de Mandos (Tecla Tab)">
+                        <span>🕹️</span> <span class="hidden sm:inline">Mandos</span>
+                    </button>
+                    <button id="dockBtnRadar" class="tactical-dock-btn active px-2 py-0.5 rounded-lg text-[9.5px] font-bold border border-slate-700/60 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/60 flex items-center gap-1 cursor-pointer select-none" title="Guardar / Mostrar Radar Táctico 2D PIP">
+                        <span>🧭</span> <span class="hidden sm:inline">Radar</span>
+                    </button>
+                    <button id="dockBtnChart" class="tactical-dock-btn active px-2 py-0.5 rounded-lg text-[9.5px] font-bold border border-slate-700/60 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/60 flex items-center gap-1 cursor-pointer select-none" title="Guardar / Mostrar Gráfica de Telemetría">
+                        <span>📊</span> <span class="hidden sm:inline">Gráfica</span>
+                    </button>
+                    <button id="dockBtnCamHud" class="tactical-dock-btn active px-2 py-0.5 rounded-lg text-[9.5px] font-bold border border-slate-700/60 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/60 flex items-center gap-1 cursor-pointer select-none" title="Guardar / Mostrar Info de Cámara y Entorno">
+                        <span>📹</span> <span class="hidden sm:inline">Cámara</span>
+                    </button>
+                    <button id="dockBtnTraffic" class="tactical-dock-btn active px-2 py-0.5 rounded-lg text-[9.5px] font-bold border border-slate-700/60 text-slate-300 hover:text-cyan-300 hover:border-cyan-500/60 flex items-center gap-1 cursor-pointer select-none" title="Guardar / Mostrar AIS Tráfico Mercante">
+                        <span>🚢</span> <span class="hidden sm:inline">AIS</span>
+                    </button>
+                    <div class="h-3 w-[1px] bg-slate-700/60 mx-0.5"></div>
+                    <button id="dockBtnFullscreen" class="tactical-dock-btn px-2 py-0.5 rounded-lg text-[9.5px] font-bold bg-slate-900 border border-slate-700/60 text-cyan-300 hover:bg-cyan-950 hover:border-cyan-400 flex items-center gap-1 cursor-pointer select-none" title="Pantalla Completa (Tecla K / F11)">
+                        <span id="dockFullscreenIcon">⛶</span> <span class="hidden sm:inline" id="dockFullscreenLabel">Completa</span>
+                    </button>
+                </div>
+
                 <!-- Overlay Banner de Pausa Táctica -->
-                <div id="pausedOverlayBanner" class="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-auto hidden transition-all duration-300">
+                <div id="pausedOverlayBanner" class="absolute top-12 left-1/2 -translate-x-1/2 z-30 pointer-events-auto hidden transition-all duration-300">
                     <div class="bg-slate-950/92 backdrop-blur-md border border-amber-500/80 rounded-2xl px-3.5 py-1.5 shadow-2xl shadow-amber-950/60 flex items-center gap-2.5">
                         <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
                         <div class="flex flex-col">
@@ -374,7 +429,7 @@
                 <div id="topLeftPanelsContainer" class="absolute top-2 left-2 flex flex-col gap-1.5 z-10 max-w-xs pointer-events-none">
                     
                     <!-- Notificaciones HUD Flotantes (Cámara, Mar, Blanco) -->
-                    <div id="hudCamInfoBox" class="pointer-events-auto bg-slate-950/90 backdrop-blur px-2.5 py-1.5 rounded-lg border border-slate-800 text-[10px] space-y-0.5 shadow-lg select-none transition-all">
+                    <div id="hudCamInfoBox" class="pointer-events-auto tactical-glass px-2.5 py-1.5 rounded-xl border border-slate-700/60 text-[10px] space-y-0.5 shadow-2xl select-none transition-all">
                         <div class="flex items-center justify-between pb-0.5 border-b border-slate-800/80 mb-0.5">
                             <span class="text-slate-400 font-bold text-[9px] flex items-center gap-1">📹 ESTADO DE CÁMARA</span>
                             <button id="closeCamHudBtn" class="text-slate-400 hover:text-rose-400 text-[11px] leading-none px-1 rounded hover:bg-slate-800 cursor-pointer transition" title="Ocultar cuadro (Reactivar en menú Vistas)">✕</button>
@@ -386,7 +441,7 @@
                     </div>
 
                     <!-- Banner Táctico de Enjambre (Pinza Naval) y AIS Mercante COLREGS -->
-                    <div id="tacticalTrafficBanner" class="pointer-events-auto bg-slate-950/90 backdrop-blur px-2.5 py-1.5 rounded-xl border border-cyan-500/40 text-[9.5px] space-y-1 shadow-xl select-none transition-all">
+                    <div id="tacticalTrafficBanner" class="pointer-events-auto tactical-glass px-2.5 py-1.5 rounded-xl border border-cyan-500/40 text-[9.5px] space-y-1 shadow-2xl select-none transition-all">
                         <div class="flex items-center justify-between text-cyan-300 font-bold border-b border-slate-800 pb-0.5">
                             <span class="flex items-center gap-1">🚢 AIS TRÁFICO MERCANTE</span>
                             <div class="flex items-center gap-1">
@@ -483,7 +538,7 @@
                 </div>
 
                 <!-- Radar Táctico 2D / Carta de Navegación PIP (Picture-in-Picture) -->
-                <div id="radarPipContainer" class="absolute bottom-2 right-2 bg-slate-950/90 backdrop-blur border border-cyan-500/50 rounded-xl p-1.5 shadow-2xl z-20 transition-all flex flex-col w-[218px]">
+                <div id="radarPipContainer" class="absolute bottom-2 right-2 tactical-glass border border-cyan-500/50 rounded-xl p-2 shadow-2xl z-20 transition-all flex flex-col w-[220px]">
                     <div class="flex justify-between items-center mb-1 text-[9px] font-bold text-slate-300 border-b border-slate-800 pb-0.5">
                         <span class="text-cyan-400 flex items-center gap-1">🧭 RADAR IMO</span>
                         <div class="flex items-center gap-1 text-[8px]">
@@ -518,8 +573,8 @@
                 </div>
             </div>
 
-            <!-- Gráfica de Telemetría en Tiempo Real (Curvas Temporales) -->
-            <div id="telemetryChartContainer" class="h-40 bg-slate-900 border border-slate-800 rounded-xl p-2 shadow-2xl flex flex-col shrink-0">
+            <!-- Gráfica de Telemetría en Tiempo Real (Curvas Temporales Plegables) -->
+            <div id="telemetryChartContainer" class="h-40 tactical-glass border border-slate-800/80 rounded-xl p-2 shadow-2xl flex flex-col shrink-0 transition-all duration-300">
                 <div class="flex items-center justify-between border-b border-slate-800 pb-1 mb-1">
                     <div class="flex items-center gap-2">
                         <span class="text-[10.5px] font-bold text-sky-400 flex items-center gap-1">
@@ -551,8 +606,18 @@
             </div>
         </div>
 
-        <!-- Columna Derecha: Consola de Mandos, Misiones, Entorno y Telemetría Bien Distribuidos -->
-        <aside id="controlSidebar" class="hidden lg:flex w-full lg:w-[380px] xl:w-[420px] bg-slate-900 border border-slate-800 rounded-xl p-2.5 flex-col justify-between overflow-y-auto custom-scrollbar gap-1.5 shadow-2xl shrink-0">
+        <!-- Columna Derecha: Consola de Mandos, Misiones, Entorno y Telemetría (Plegable y Guardable) -->
+        <aside id="controlSidebar" class="hidden lg:flex w-full lg:w-[380px] xl:w-[420px] tactical-glass border border-slate-800/80 rounded-xl p-2.5 flex-col justify-between overflow-y-auto custom-scrollbar gap-1.5 shadow-2xl shrink-0 transition-all duration-300">
+            <!-- Barra Superior de la Consola: Título y Botón Minimizar/Guardar -->
+            <div class="flex items-center justify-between pb-1.5 border-b border-slate-800/80 mb-0.5 shrink-0 select-none">
+                <div class="flex items-center gap-1.5 text-xs font-black text-slate-100 tracking-wider">
+                    <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                    <span class="text-cyan-300">PUENTE C2 // MANDOS</span>
+                </div>
+                <button id="minimizeSidebarBtn" class="text-slate-400 hover:text-cyan-300 px-2 py-0.5 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-700/60 text-[9.5px] font-bold transition flex items-center gap-1 cursor-pointer select-none" title="Guardar / Ocultar Consola de Mandos (Tecla Tab)">
+                    <span>✕</span> <span class="text-[8.5px]">Guardar</span>
+                </button>
+            </div>
             
             <div class="space-y-1.5">
                 <!-- Bloque 1: Selector de Misiones Tácticas -->
@@ -6353,77 +6418,244 @@ class Water extends Mesh {
         }
         updateQrModalData();
 
-        // Toggles de Gráfica y Radar PIP
+        /* =========================================================================
+           SISTEMA DE GESTIÓN TÁCTICA DE PANELES, VENTANAS Y PANTALLA COMPLETA
+           ========================================================================= */
         const chartContainer = document.getElementById('telemetryChartContainer');
         const radarContainer = document.getElementById('radarPipContainer');
 
-        function toggleCamHud(show) {
-            const box = document.getElementById('hudCamInfoBox');
-            const label = document.getElementById('camHudStatusLabel');
-            if (!box) return;
-            const isHidden = (show !== undefined) ? !show : !box.classList.contains('hidden');
-            if (isHidden) {
-                box.classList.add('hidden');
-                if (label) label.innerText = "OFF";
-            } else {
-                box.classList.remove('hidden');
-                if (label) label.innerText = "ON";
+        const PANELS_STORAGE_KEY = 'sim_naval_panels_state_v3';
+        const panelsState = {
+            sidebar: true,
+            radar: true,
+            chart: true,
+            camHud: true,
+            traffic: true
+        };
+
+        function loadPanelsState() {
+            try {
+                const raw = localStorage.getItem(PANELS_STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    Object.assign(panelsState, parsed);
+                }
+            } catch (e) {
+                navalWarn("Error al cargar preferencias de paneles:", e);
             }
         }
-        const tCamBtn = document.getElementById('toggleCamHudBtn');
-        if (tCamBtn) tCamBtn.addEventListener('click', () => toggleCamHud());
-        const cCamBtn = document.getElementById('closeCamHudBtn');
-        if (cCamBtn) cCamBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleCamHud(false);
-        });
+
+        function savePanelsState() {
+            try {
+                localStorage.setItem(PANELS_STORAGE_KEY, JSON.stringify(panelsState));
+            } catch (e) {
+                navalWarn("Error al guardar preferencias de paneles:", e);
+            }
+        }
+
+        function syncDockButton(dockId, isActive) {
+            const btn = document.getElementById(dockId);
+            if (!btn) return;
+            if (isActive) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        }
+
+        function toggleSidebar(show) {
+            const sidebar = document.getElementById('controlSidebar');
+            const menuLabel = document.getElementById('sidebarMenuStatusLabel');
+            if (!sidebar) return;
+            const willShow = (show !== undefined) ? !!show : sidebar.classList.contains('hidden');
+            panelsState.sidebar = willShow;
+
+            if (willShow) {
+                sidebar.classList.remove('hidden');
+                sidebar.classList.add('flex');
+                if (menuLabel) menuLabel.innerText = "ON";
+            } else {
+                sidebar.classList.add('hidden');
+                sidebar.classList.remove('flex');
+                if (menuLabel) menuLabel.innerText = "OFF";
+            }
+            syncDockButton('dockBtnSidebar', willShow);
+            savePanelsState();
+            setTimeout(onWindowResize, 60);
+        }
+
+        function toggleRadar(show) {
+            if (!radarContainer) return;
+            const willShow = (show !== undefined) ? !!show : radarContainer.classList.contains('hidden');
+            panelsState.radar = willShow;
+
+            if (willShow) {
+                radarContainer.classList.remove('hidden');
+                const label = document.getElementById('radarStatusLabel');
+                if (label) label.innerText = "ON";
+            } else {
+                radarContainer.classList.add('hidden');
+                const label = document.getElementById('radarStatusLabel');
+                if (label) label.innerText = "OFF";
+            }
+            syncDockButton('dockBtnRadar', willShow);
+            savePanelsState();
+        }
+
+        function toggleChart(show) {
+            if (!chartContainer) return;
+            const willShow = (show !== undefined) ? !!show : chartContainer.classList.contains('hidden');
+            panelsState.chart = willShow;
+
+            if (willShow) {
+                chartContainer.classList.remove('hidden');
+                const label = document.getElementById('chartStatusLabel');
+                if (label) label.innerText = "ON";
+            } else {
+                chartContainer.classList.add('hidden');
+                const label = document.getElementById('chartStatusLabel');
+                if (label) label.innerText = "OFF";
+            }
+            syncDockButton('dockBtnChart', willShow);
+            savePanelsState();
+            setTimeout(onWindowResize, 60);
+        }
+
+        function toggleCamHud(show) {
+            const box = document.getElementById('hudCamInfoBox');
+            if (!box) return;
+            const willShow = (show !== undefined) ? !!show : box.classList.contains('hidden');
+            panelsState.camHud = willShow;
+
+            if (willShow) {
+                box.classList.remove('hidden');
+                const label = document.getElementById('camHudStatusLabel');
+                if (label) label.innerText = "ON";
+            } else {
+                box.classList.add('hidden');
+                const label = document.getElementById('camHudStatusLabel');
+                if (label) label.innerText = "OFF";
+            }
+            syncDockButton('dockBtnCamHud', willShow);
+            savePanelsState();
+        }
 
         function toggleTrafficBanner(show) {
             const banner = document.getElementById('tacticalTrafficBanner');
-            const label = document.getElementById('trafficBannerStatusLabel');
             if (!banner) return;
-            const isHidden = (show !== undefined) ? !show : !banner.classList.contains('hidden');
-            if (isHidden) {
-                banner.classList.add('hidden');
-                if (label) label.innerText = "OFF";
-            } else {
+            const willShow = (show !== undefined) ? !!show : banner.classList.contains('hidden');
+            panelsState.traffic = willShow;
+
+            if (willShow) {
                 banner.classList.remove('hidden');
+                const label = document.getElementById('trafficBannerStatusLabel');
                 if (label) label.innerText = "ON";
+            } else {
+                banner.classList.add('hidden');
+                const label = document.getElementById('trafficBannerStatusLabel');
+                if (label) label.innerText = "OFF";
+            }
+            syncDockButton('dockBtnTraffic', willShow);
+            savePanelsState();
+        }
+
+        function applySavedPanels() {
+            loadPanelsState();
+            toggleSidebar(panelsState.sidebar);
+            toggleRadar(panelsState.radar);
+            toggleChart(panelsState.chart);
+            toggleCamHud(panelsState.camHud);
+            toggleTrafficBanner(panelsState.traffic);
+        }
+
+        // Sistema de Pantalla Completa (Full Screen API)
+        function toggleFullScreen() {
+            const doc = document;
+            const docEl = doc.documentElement;
+            const isFull = !!(doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
+            if (!isFull) {
+                const req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+                if (req) {
+                    req.call(docEl).catch(err => navalWarn("Fullscreen error:", err));
+                }
+            } else {
+                const exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+                if (exit) {
+                    exit.call(doc).catch(err => navalWarn("Exit fullscreen error:", err));
+                }
             }
         }
+
+        function updateFullscreenUI() {
+            const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            const iconHeader = document.getElementById('fullscreenIcon');
+            const textHeader = document.getElementById('fullscreenText');
+            const iconDock = document.getElementById('dockFullscreenIcon');
+            const labelDock = document.getElementById('dockFullscreenLabel');
+
+            if (isFull) {
+                if (iconHeader) iconHeader.innerText = "🗗";
+                if (textHeader) textHeader.innerText = "Salir Full";
+                if (iconDock) iconDock.innerText = "🗗";
+                if (labelDock) labelDock.innerText = "Salir";
+            } else {
+                if (iconHeader) iconHeader.innerText = "⛶";
+                if (textHeader) textHeader.innerText = "Pantalla";
+                if (iconDock) iconDock.innerText = "⛶";
+                if (labelDock) labelDock.innerText = "Completa";
+            }
+            setTimeout(onWindowResize, 100);
+        }
+
+        document.addEventListener('fullscreenchange', updateFullscreenUI);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+
+        // Listeners de los Botones del Dock Táctico Flotante
+        const dockSidebar = document.getElementById('dockBtnSidebar');
+        if (dockSidebar) dockSidebar.addEventListener('click', () => { toggleSidebar(); dockSidebar.blur(); });
+        const dockRadar = document.getElementById('dockBtnRadar');
+        if (dockRadar) dockRadar.addEventListener('click', () => { toggleRadar(); dockRadar.blur(); });
+        const dockChart = document.getElementById('dockBtnChart');
+        if (dockChart) dockChart.addEventListener('click', () => { toggleChart(); dockChart.blur(); });
+        const dockCamHud = document.getElementById('dockBtnCamHud');
+        if (dockCamHud) dockCamHud.addEventListener('click', () => { toggleCamHud(); dockCamHud.blur(); });
+        const dockTraffic = document.getElementById('dockBtnTraffic');
+        if (dockTraffic) dockTraffic.addEventListener('click', () => { toggleTrafficBanner(); dockTraffic.blur(); });
+        const dockFull = document.getElementById('dockBtnFullscreen');
+        if (dockFull) dockFull.addEventListener('click', () => { toggleFullScreen(); dockFull.blur(); });
+
+        // Botón Pantalla Completa en Header Bar
+        const btnFullHeader = document.getElementById('btnFullScreen');
+        if (btnFullHeader) btnFullHeader.addEventListener('click', () => { toggleFullScreen(); btnFullHeader.blur(); });
+
+        // Botón Minimizar de la Consola de Mandos
+        const minSidebarBtn = document.getElementById('minimizeSidebarBtn');
+        if (minSidebarBtn) minSidebarBtn.addEventListener('click', () => toggleSidebar(false));
+
+        // Botón Sidebar en Menú Vistas
+        const menuSidebarBtn = document.getElementById('toggleSidebarMenuBtn');
+        if (menuSidebarBtn) menuSidebarBtn.addEventListener('click', () => toggleSidebar());
+
+        // Listeners de cierre individuales en cada ventana
+        const tCamBtn = document.getElementById('toggleCamHudBtn');
+        if (tCamBtn) tCamBtn.addEventListener('click', () => toggleCamHud());
+        const cCamBtn = document.getElementById('closeCamHudBtn');
+        if (cCamBtn) cCamBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleCamHud(false); });
+
         const tTrafficBtn = document.getElementById('toggleTrafficBannerBtn');
         if (tTrafficBtn) tTrafficBtn.addEventListener('click', () => toggleTrafficBanner());
         const cTrafficBtn = document.getElementById('closeTrafficBannerBtn');
-        if (cTrafficBtn) cTrafficBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleTrafficBanner(false);
-        });
+        if (cTrafficBtn) cTrafficBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleTrafficBanner(false); });
 
-        function toggleChart(show) {
-            const isHidden = (show !== undefined) ? !show : !chartContainer.classList.contains('hidden');
-            if (isHidden) {
-                chartContainer.classList.add('hidden');
-                document.getElementById('chartStatusLabel').innerText = "OFF";
-            } else {
-                chartContainer.classList.remove('hidden');
-                document.getElementById('chartStatusLabel').innerText = "ON";
-            }
-        }
-        document.getElementById('toggleChartBtn').addEventListener('click', () => toggleChart());
-        document.getElementById('minimizeChartBtn').addEventListener('click', () => toggleChart(false));
+        const tChartBtn = document.getElementById('toggleChartBtn');
+        if (tChartBtn) tChartBtn.addEventListener('click', () => toggleChart());
+        const minChartBtn = document.getElementById('minimizeChartBtn');
+        if (minChartBtn) minChartBtn.addEventListener('click', () => toggleChart(false));
 
-        function toggleRadar(show) {
-            const isHidden = (show !== undefined) ? !show : !radarContainer.classList.contains('hidden');
-            if (isHidden) {
-                radarContainer.classList.add('hidden');
-                document.getElementById('radarStatusLabel').innerText = "OFF";
-            } else {
-                radarContainer.classList.remove('hidden');
-                document.getElementById('radarStatusLabel').innerText = "ON";
-            }
-        }
-        document.getElementById('toggleRadarBtn').addEventListener('click', () => toggleRadar());
-        document.getElementById('minimizeRadarBtn').addEventListener('click', () => toggleRadar(false));
+        const tRadarBtn = document.getElementById('toggleRadarBtn');
+        if (tRadarBtn) tRadarBtn.addEventListener('click', () => toggleRadar());
+        const minRadarBtn = document.getElementById('minimizeRadarBtn');
+        if (minRadarBtn) minRadarBtn.addEventListener('click', () => toggleRadar(false));
 
         // Controles IMO ECDIS / ARPA Radar
         const btnRadarOrient = document.getElementById('btnRadarOrient');
@@ -7076,6 +7308,8 @@ class Water extends Mesh {
             if (k === ' ' || k === 'x') { document.getElementById('btnRudZero').click(); return; }
             if (k === 'z') { document.getElementById('btnThrStop').click(); return; }
             if (k === 'v') { cycleTacticalVision(); return; }
+            if (k === 'k') { toggleFullScreen(); return; }
+            if (k === 'tab') { e.preventDefault(); toggleSidebar(); return; }
             if (k === 'f') { if (!e.repeat) fireNavalCannon(); return; }
             if (k === 'b') { if (!e.repeat) launchSarFlare(); return; }
 
@@ -9498,6 +9732,11 @@ class Water extends Mesh {
 
         // Inicialización segura y resiliente a prueba de fallos
         (async () => {
+            try {
+                applySavedPanels();
+            } catch (e) {
+                navalWarn("[INIT] Fallback en paneles guardados:", e);
+            }
             try {
                 applyMissionScenario(1);
             } catch (e) {
