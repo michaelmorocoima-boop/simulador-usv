@@ -159,6 +159,9 @@
                     <button class="nav-cam-btn w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 font-bold transition text-[10px]" data-cam="cinematic">
                         🎬 4. Cinemática (Aérea 360°)
                     </button>
+                    <button class="nav-cam-btn w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 font-bold transition text-[10px]" data-cam="fpv">
+                        🎯 5. FPV Táctico (Ojiva Proa)
+                    </button>
                 </div>
             </div>
 
@@ -222,6 +225,21 @@
             <!-- Selector de Modo de Mar (Estándar / La Guaira HD) -->
             <button id="toggleSeaModeBtn" class="bg-slate-900 hover:bg-teal-950 text-teal-300 px-2 sm:px-2.5 py-1 rounded-lg border border-teal-500/50 transition flex items-center gap-1 shadow text-[10px] font-bold" title="Alternar Modo de Mar: Estándar (JONSWAP) / La Guaira HD (Tecla O)">
                 <span>🌊 Mar:</span> <span id="seaModeLabel" class="text-teal-400 font-bold">ESTÁNDAR</span>
+            </button>
+
+            <!-- Botón FUEGO / Armamento Naval (Tecla F) -->
+            <button id="btnNavFire" class="bg-red-950/90 hover:bg-red-900 active:scale-95 text-red-200 px-2 sm:px-2.5 py-1 rounded-lg border border-red-500/70 transition flex items-center gap-1 shadow-lg shadow-red-950/80 text-[10px] font-black cursor-pointer select-none" title="Disparar Cañón Naval 76mm / Carga Táctica (Tecla F)">
+                <span>💥 FUEGO</span>
+            </button>
+
+            <!-- Botón Bengala Iluminante SAR (Tecla B) -->
+            <button id="btnNavFlare" class="bg-amber-950/80 hover:bg-amber-900 active:scale-95 text-amber-200 px-2 sm:px-2.5 py-1 rounded-lg border border-amber-500/60 transition flex items-center gap-1 shadow text-[10px] font-bold cursor-pointer select-none" title="Lanzar Bengala Iluminante SAR (Tecla B)">
+                <span>✨ Bengala</span>
+            </button>
+
+            <!-- Botón Clima Tempestuoso (Lluvia y Rayos) -->
+            <button id="btnNavWeather" class="bg-slate-900 hover:bg-sky-950 text-sky-300 px-2 sm:px-2.5 py-1 rounded-lg border border-sky-500/50 transition flex items-center gap-1 shadow text-[10px] font-bold cursor-pointer select-none" title="Alternar Lluvia y Tempestad Marina">
+                <span>🌧️ Clima:</span> <span id="weatherStatusLabel" class="text-slate-400">OFF</span>
             </button>
         </nav>
 
@@ -287,6 +305,31 @@
                         <button id="bannerResumeBtn" class="ml-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-xl text-[10px] font-black transition shadow active:scale-95 cursor-pointer flex items-center gap-1">
                             ▶️ PLAY
                         </button>
+                    </div>
+                </div>
+
+                <!-- Lienzo de Gotas de Agua en Pantalla (Spray Marino / Lluvia Dinámica) -->
+                <canvas id="screenDropsCanvas" class="absolute inset-0 pointer-events-none z-10 w-full h-full"></canvas>
+
+                <!-- Overlay FPV Táctico / Cámara de Ojiva Proa (Modo 5) -->
+                <div id="fpvTacticalOverlay" class="absolute inset-0 pointer-events-none z-15 hidden flex flex-col justify-between p-4 select-none">
+                    <div class="flex justify-between items-center font-mono text-[9.5px] font-black text-rose-400">
+                        <span class="px-2 py-0.5 rounded bg-black/85 border border-rose-500/80 shadow tracking-wider animate-pulse flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-rose-500 inline-block animate-ping"></span>
+                            <span>● LIVE · FPV TACTICAL WARHEAD CAM</span>
+                        </span>
+                        <span id="fpvRangeBadge" class="px-2 py-0.5 rounded bg-black/85 border border-rose-500/80 font-mono shadow text-amber-300">RNG TO TGT: ---.- m</span>
+                    </div>
+                    <div class="self-center flex items-center justify-center relative w-28 h-28 opacity-85">
+                        <div class="absolute w-full h-[1px] bg-rose-500/80"></div>
+                        <div class="absolute h-full w-[1px] bg-rose-500/80"></div>
+                        <div class="w-14 h-14 rounded-full border border-rose-500/60 border-dashed animate-spin" style="animation-duration: 10s;"></div>
+                        <div class="w-2 h-2 rounded-full bg-rose-500 absolute"></div>
+                        <div class="absolute -top-4 text-[7.5px] font-mono text-rose-300 font-bold tracking-widest">[ OJIVA ACTIVADA ]</div>
+                    </div>
+                    <div class="flex justify-between items-end font-mono text-[8.5px] font-black text-rose-400">
+                        <span class="bg-black/85 px-1.5 py-0.5 rounded border border-rose-500/60 shadow">IMU GYRO: ESTABILIZADO</span>
+                        <span class="bg-black/85 px-1.5 py-0.5 rounded border border-rose-500/60 shadow">[F] DISPARAR ARTILLERÍA / CARGA</span>
                     </div>
                 </div>
 
@@ -429,6 +472,15 @@
                             <button id="btnRadarRange" class="px-1 py-0.2 bg-slate-800 hover:bg-cyan-900 border border-cyan-700/60 rounded text-slate-300 font-mono font-bold" title="Alternar Rango: 150m / 300m / 600m">300m</button>
                             <button id="minimizeRadarBtn" class="text-slate-400 hover:text-white px-0.5">✕</button>
                         </div>
+                    </div>
+                    <!-- Barra de Waypoints Tácticos (Click en radar para añadir) -->
+                    <div class="flex items-center justify-between gap-1 mb-1 text-[8px] font-mono">
+                        <button id="btnAutoWp" class="flex-1 py-0.5 bg-slate-900 hover:bg-sky-950 border border-sky-600/50 rounded text-sky-300 font-bold transition flex items-center justify-center gap-1 select-none" title="Activar/Desactivar navegación automática por Waypoints">
+                            <span>📍 WP:</span> <span id="autoWpStatusText" class="text-slate-400">OFF</span>
+                        </button>
+                        <button id="btnClearWp" class="px-1.5 py-0.5 bg-slate-900 hover:bg-rose-950 border border-rose-700/50 rounded text-rose-300 font-bold transition select-none" title="Borrar ruta y waypoints trazados">
+                            Limpiar
+                        </button>
                     </div>
                     <canvas id="radarCanvas" width="204" height="204" class="block rounded bg-slate-950 border border-slate-800/80 cursor-crosshair mx-auto"></canvas>
                     
@@ -1098,17 +1150,19 @@
         controls.dampingFactor = 0.08;
         controls.maxPolarAngle = Math.PI / 2.05;
 
-        // Modos de Cámara idénticos al Simulador de La Guaira:
+        // Modos de Cámara idénticos al Simulador de La Guaira + FPV Táctico:
         // 0: 'orbital' (Libre 360° con arrastre dinámico del buque)
         // 1: 'bridge' (Puente de mando / Cockpit 1ª persona con horizonte estabilizado)
         // 2: 'chase' (Persecución dinámica en 3ª persona adaptativa con FOV dinámico)
         // 3: 'cinematic' (Cinemática aérea circular 360°)
-        const CAM_MODES = ['orbital', 'bridge', 'chase', 'cinematic'];
+        // 4: 'fpv' (FPV Táctico / Cámara de Ojiva en Proa)
+        const CAM_MODES = ['orbital', 'bridge', 'chase', 'cinematic', 'fpv'];
         const CAM_LABELS = {
             orbital: 'Orbital (Libre 360°)',
             bridge: 'Puente de Mando',
             chase: 'Persecución Dinámica',
-            cinematic: 'Cinemática Aérea'
+            cinematic: 'Cinemática Aérea',
+            fpv: 'FPV Táctico (Ojiva Proa)'
         };
         let cameraMode = 'orbital';
         let camModeIndex = 0;
@@ -2416,6 +2470,8 @@ class Water extends Mesh {
             barrel.rotation.x = Math.PI / 2.3;
             barrel.position.set(0, 5.2, 14.8);
             root.add(barrel);
+            root.userData.barrel = barrel;
+            root.userData.turret = turret;
 
             parent.add(root);
             return root;
@@ -2596,6 +2652,22 @@ class Water extends Mesh {
             shipGroup.userData.korsarGroup = korsarGroup;
             const procKorsar = buildProceduralKorsar(korsarGroup);
             shipGroup.userData.procKorsar = procKorsar;
+
+            // Luces de Navegación Reglamentarias COLREGS para Corbeta Korsar
+            const korsarNavLights = new THREE.Group();
+            const kPort = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+            kPort.position.set(-3.5, 4.2, 5.0);
+            korsarNavLights.add(kPort);
+            const kStbd = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), new THREE.MeshBasicMaterial({ color: 0x22c55e }));
+            kStbd.position.set(3.5, 4.2, 5.0);
+            korsarNavLights.add(kStbd);
+            const kMast = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+            kMast.position.set(0, 11.2, 1.2);
+            korsarNavLights.add(kMast);
+            const kStern = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+            kStern.position.set(0, 3.8, -19.5);
+            korsarNavLights.add(kStern);
+            korsarGroup.add(korsarNavLights);
 
             // 6B. Grupo del Dron Naval Sea Baby (.GLB + Procedural Fallback)
             const seababyGroup = new THREE.Group();
@@ -4226,6 +4298,40 @@ class Water extends Mesh {
                     if (i === 0) radarCtx.moveTo(pt.x, pt.y); else radarCtx.lineTo(pt.x, pt.y);
                 }
                 radarCtx.stroke();
+            }
+
+            // Waypoints Trazados por el Usuario (Derrota Táctica)
+            if (typeof radarWaypoints !== 'undefined' && radarWaypoints.length > 0) {
+                radarCtx.save();
+                radarCtx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
+                radarCtx.lineWidth = 1.2;
+                radarCtx.setLineDash([4, 3]);
+                radarCtx.beginPath();
+                const startPt = toRadar(usvX, usvY);
+                radarCtx.moveTo(startPt.x, startPt.y);
+                radarWaypoints.forEach(wp => {
+                    const pw = toRadar(wp.x, wp.y);
+                    radarCtx.lineTo(pw.x, pw.y);
+                });
+                radarCtx.stroke();
+                radarCtx.setLineDash([]);
+
+                radarWaypoints.forEach((wp, idx) => {
+                    const pw = toRadar(wp.x, wp.y);
+                    const isCur = (idx === currentWaypointIndex && autoWaypointNav);
+                    radarCtx.fillStyle = isCur ? '#38bdf8' : '#0284c7';
+                    radarCtx.strokeStyle = isCur ? '#ffffff' : '#38bdf8';
+                    radarCtx.lineWidth = 1.5;
+                    radarCtx.beginPath();
+                    radarCtx.arc(pw.x, pw.y, isCur ? 4.5 : 3.5, 0, Math.PI * 2);
+                    radarCtx.fill();
+                    radarCtx.stroke();
+
+                    radarCtx.fillStyle = '#ffffff';
+                    radarCtx.font = 'bold 8px monospace';
+                    radarCtx.fillText(`WP${idx + 1}`, pw.x + 5, pw.y - 3);
+                });
+                radarCtx.restore();
             }
 
             // -----------------------------------------------------------------
@@ -5924,7 +6030,7 @@ class Water extends Mesh {
 
         function setCameraMode(mode) {
             if (typeof mode === 'number') {
-                camModeIndex = ((mode % 4) + 4) % 4;
+                camModeIndex = ((mode % CAM_MODES.length) + CAM_MODES.length) % CAM_MODES.length;
                 cameraMode = CAM_MODES[camModeIndex];
             } else {
                 const map = {
@@ -5935,7 +6041,8 @@ class Water extends Mesh {
                     follow: 'chase',
                     chase: 'chase',
                     top: 'cinematic',
-                    cinematic: 'cinematic'
+                    cinematic: 'cinematic',
+                    fpv: 'fpv'
                 };
                 cameraMode = map[mode] || 'orbital';
                 camModeIndex = CAM_MODES.indexOf(cameraMode);
@@ -5958,9 +6065,12 @@ class Water extends Mesh {
                 prevCamShipPos.set(sX, sY, sZ);
             }
 
-            const fovs = { orbital: 55, bridge: 70, chase: 55, cinematic: 48 };
+            const fovs = { orbital: 55, bridge: 70, chase: 55, cinematic: 48, fpv: 80 };
             camera.fov = fovs[cameraMode] || 55;
             camera.updateProjectionMatrix();
+
+            const fpvOverlay = document.getElementById('fpvTacticalOverlay');
+            if (fpvOverlay) fpvOverlay.classList.toggle('hidden', cameraMode !== 'fpv');
 
             document.querySelectorAll('.nav-cam-btn').forEach(btn => {
                 const isMatch = (btn.dataset.cam === cameraMode);
@@ -5993,7 +6103,8 @@ class Water extends Mesh {
             if (k === ' ' || k === 'x') { document.getElementById('btnRudZero').click(); return; }
             if (k === 'z') { document.getElementById('btnThrStop').click(); return; }
             if (k === 'v') { cycleTacticalVision(); return; }
-            if (k === 'b') { document.getElementById('btnThrMax').click(); return; }
+            if (k === 'f') { fireNavalCannon(); return; }
+            if (k === 'b') { launchSarFlare(); return; }
 
             const rudEl = document.getElementById('rudderRange');
             const thrEl = document.getElementById('thrustRange');
@@ -6022,6 +6133,666 @@ class Water extends Mesh {
                 sendControls();
             }
         });
+
+        /* =========================================================================
+           11B. SISTEMAS NAVALES AVANZADOS (ARTILLERÍA, BENGALAS, CLIMA, WP Y GOTAS)
+           ========================================================================= */
+
+        // 1. Audio Procedural para Efectos Tácticos Navales
+        function playNavalCannonSound() {
+            if (!audioCtx) initNavalAudio();
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            try {
+                const now = audioCtx.currentTime;
+                // Impulso subsónico explosivo (30-150Hz)
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.45);
+                gain.gain.setValueAtTime(0.9, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+                osc.connect(gain);
+                gain.connect(masterGain || audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.9);
+
+                // Ruido de detonación y onda de choque en boca
+                const noiseBuf = createNoiseBuffer(audioCtx, 0.45);
+                const noiseSource = audioCtx.createBufferSource();
+                noiseSource.buffer = noiseBuf;
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(1800, now);
+                filter.frequency.exponentialRampToValueAtTime(100, now + 0.4);
+                const nGain = audioCtx.createGain();
+                nGain.gain.setValueAtTime(0.8, now);
+                nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+                noiseSource.connect(filter);
+                filter.connect(nGain);
+                nGain.connect(masterGain || audioCtx.destination);
+                noiseSource.start(now);
+                noiseSource.stop(now + 0.6);
+            } catch (err) {
+                console.warn("Cannon sound error:", err);
+            }
+        }
+
+        function playFlareLaunchSound() {
+            if (!audioCtx) initNavalAudio();
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            try {
+                const now = audioCtx.currentTime;
+                const noiseBuf = createNoiseBuffer(audioCtx, 1.2);
+                const noiseSource = audioCtx.createBufferSource();
+                noiseSource.buffer = noiseBuf;
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(450, now);
+                filter.frequency.exponentialRampToValueAtTime(2400, now + 0.9);
+                filter.Q.setValueAtTime(4.0, now);
+                const gain = audioCtx.createGain();
+                gain.gain.setValueAtTime(0.01, now);
+                gain.gain.linearRampToValueAtTime(0.5, now + 0.2);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 1.15);
+                noiseSource.connect(filter);
+                filter.connect(gain);
+                gain.connect(masterGain || audioCtx.destination);
+                noiseSource.start(now);
+                noiseSource.stop(now + 1.2);
+            } catch (err) {
+                console.warn("Flare sound error:", err);
+            }
+        }
+
+        function playHullSlamSound(intensity) {
+            if (intensity === undefined) intensity = 1.0;
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            try {
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(60, now);
+                osc.frequency.exponentialRampToValueAtTime(22, now + 0.38);
+                const volume = Math.min(0.65, 0.30 * intensity);
+                gain.gain.setValueAtTime(volume, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+                osc.connect(gain);
+                gain.connect(masterGain || audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            } catch (err) {}
+        }
+
+        function playThunderSound() {
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            try {
+                const now = audioCtx.currentTime;
+                const noiseBuf = createNoiseBuffer(audioCtx, 3.5);
+                const noiseSource = audioCtx.createBufferSource();
+                noiseSource.buffer = noiseBuf;
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(160, now);
+                filter.frequency.linearRampToValueAtTime(70, now + 3.0);
+                const gain = audioCtx.createGain();
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.linearRampToValueAtTime(0.45, now + 0.4);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 3.2);
+                noiseSource.connect(filter);
+                filter.connect(gain);
+                gain.connect(masterGain || audioCtx.destination);
+                noiseSource.start(now);
+                noiseSource.stop(now + 3.4);
+            } catch (err) {}
+        }
+
+        // 2. Sistema de Gotas en Pantalla (Screen Drops Overlay)
+        const screenDropsCanvas = document.getElementById('screenDropsCanvas');
+        const screenDropsCtx = screenDropsCanvas ? screenDropsCanvas.getContext('2d') : null;
+        const screenDrops = [];
+        let lastHullSlamTime = 0;
+        let prevEtaLocal = 0;
+
+        function triggerScreenDropBurst(count) {
+            if (count === undefined) count = 5;
+            if (!screenDropsCanvas) return;
+            const w = screenDropsCanvas.width || 800;
+            const h = screenDropsCanvas.height || 450;
+            for (let i = 0; i < count; i++) {
+                if (screenDrops.length >= 60) break;
+                screenDrops.push({
+                    x: Math.random() * w,
+                    y: Math.random() * (h * 0.75),
+                    r: 2.5 + Math.random() * 4.5,
+                    alpha: 0.65 + Math.random() * 0.35,
+                    vy: 12.0 + Math.random() * 25.0,
+                    life: 2.5 + Math.random() * 3.5
+                });
+            }
+        }
+
+        function updateScreenDrops(dt) {
+            if (!screenDropsCanvas || !screenDropsCtx) return;
+            const w = screenDropsCanvas.clientWidth || 800;
+            const h = screenDropsCanvas.clientHeight || 450;
+            if (screenDropsCanvas.width !== w || screenDropsCanvas.height !== h) {
+                screenDropsCanvas.width = w;
+                screenDropsCanvas.height = h;
+            }
+
+            const spd = (currentState && currentState.u) || 0;
+            if (isStormWeather && Math.random() < 0.22) {
+                triggerScreenDropBurst(1);
+            } else if (spd > 15.0 && Math.random() < 0.08) {
+                triggerScreenDropBurst(1);
+            }
+
+            screenDropsCtx.clearRect(0, 0, w, h);
+            if (screenDrops.length === 0) return;
+
+            for (let i = screenDrops.length - 1; i >= 0; i--) {
+                const d = screenDrops[i];
+                d.y += d.vy * dt;
+                d.life -= dt;
+                d.alpha = Math.max(0, d.alpha - dt * 0.18);
+
+                if (d.life <= 0 || d.alpha <= 0 || d.y > h + 10) {
+                    screenDrops.splice(i, 1);
+                    continue;
+                }
+
+                screenDropsCtx.save();
+                screenDropsCtx.beginPath();
+                screenDropsCtx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+                screenDropsCtx.fillStyle = `rgba(186, 230, 253, ${d.alpha * 0.28})`;
+                screenDropsCtx.fill();
+
+                screenDropsCtx.strokeStyle = `rgba(14, 116, 144, ${d.alpha * 0.5})`;
+                screenDropsCtx.lineWidth = 1;
+                screenDropsCtx.stroke();
+
+                screenDropsCtx.beginPath();
+                screenDropsCtx.arc(d.x - d.r * 0.35, d.y - d.r * 0.35, d.r * 0.28, 0, Math.PI * 2);
+                screenDropsCtx.fillStyle = `rgba(255, 255, 255, ${d.alpha * 0.85})`;
+                screenDropsCtx.fill();
+                screenDropsCtx.restore();
+            }
+        }
+
+        // 3. Sistema Meteorológico y Tormenta Marina (Lluvia 3D y Rayos)
+        let isStormWeather = false;
+        let rainParticleSystem = null;
+        let rainGeo = null;
+        const RAIN_COUNT = 3000;
+        let nextLightningTime = 0;
+        let lightningFlashTimer = 0;
+
+        function initRainSystem() {
+            if (rainParticleSystem) return;
+            rainGeo = new THREE.BufferGeometry();
+            const positions = new Float32Array(RAIN_COUNT * 3);
+            for (let i = 0; i < RAIN_COUNT; i++) {
+                positions[i * 3 + 0] = (Math.random() - 0.5) * 320;
+                positions[i * 3 + 1] = Math.random() * 90;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 320;
+            }
+            rainGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const rainMat = new THREE.PointsMaterial({
+                color: 0x93c5fd,
+                size: 0.75,
+                transparent: true,
+                opacity: 0.65,
+                depthWrite: false
+            });
+
+            rainParticleSystem = new THREE.Points(rainGeo, rainMat);
+            rainParticleSystem.visible = false;
+            scene.add(rainParticleSystem);
+        }
+
+        function toggleWeatherSystem() {
+            isStormWeather = !isStormWeather;
+            initRainSystem();
+            if (rainParticleSystem) rainParticleSystem.visible = isStormWeather;
+            const wLabel = document.getElementById('weatherStatusLabel');
+            if (wLabel) {
+                wLabel.innerText = isStormWeather ? 'TORMENTA' : 'OFF';
+                wLabel.className = isStormWeather ? 'text-sky-300 font-bold' : 'text-slate-400';
+            }
+            const btnW = document.getElementById('btnNavWeather');
+            if (btnW) {
+                btnW.className = isStormWeather
+                    ? 'bg-sky-950/90 text-sky-200 px-2 sm:px-2.5 py-1 rounded-lg border border-sky-400/80 transition flex items-center gap-1 shadow-lg text-[10px] font-bold cursor-pointer select-none'
+                    : 'bg-slate-900 hover:bg-sky-950 text-sky-300 px-2 sm:px-2.5 py-1 rounded-lg border border-sky-500/50 transition flex items-center gap-1 shadow text-[10px] font-bold cursor-pointer select-none';
+            }
+            if (isStormWeather) {
+                nextLightningTime = (typeof simTime !== 'undefined' ? simTime : 0) + 6.0 + Math.random() * 8.0;
+            }
+        }
+        window.toggleWeatherSystem = toggleWeatherSystem;
+
+        function updateWeatherSystem(dt) {
+            if (!isStormWeather || !rainParticleSystem) return;
+
+            const camPos = camera.position;
+            rainParticleSystem.position.set(camPos.x, 0, camPos.z);
+
+            const posAttr = rainGeo.attributes.position;
+            const arr = posAttr.array;
+            const fallSpd = 72.0 * dt;
+            const windDriftX = 14.0 * dt;
+            const windDriftZ = 8.0 * dt;
+
+            for (let i = 0; i < RAIN_COUNT; i++) {
+                const idx = i * 3;
+                arr[idx + 1] -= fallSpd;
+                arr[idx + 0] += windDriftX;
+                arr[idx + 2] += windDriftZ;
+
+                if (arr[idx + 1] < -5.0) {
+                    arr[idx + 1] = 85.0 + Math.random() * 10.0;
+                    arr[idx + 0] = (Math.random() - 0.5) * 320;
+                    arr[idx + 2] = (Math.random() - 0.5) * 320;
+                }
+            }
+            posAttr.needsUpdate = true;
+
+            if (lightningFlashTimer > 0) {
+                lightningFlashTimer -= dt;
+                if (lightningFlashTimer <= 0) {
+                    const t = THEMES[currentThemeKey];
+                    dirLight.intensity = t.sunIntensity;
+                    dirLight.color.setHex(t.sunColor);
+                }
+            } else if (simTime >= nextLightningTime) {
+                dirLight.intensity = 5.5;
+                dirLight.color.setHex(0xe0f2fe);
+                lightningFlashTimer = 0.12;
+                nextLightningTime = simTime + 10.0 + Math.random() * 14.0;
+                triggerScreenDropBurst(8);
+
+                const soundDelayMs = 1200 + Math.random() * 1600;
+                setTimeout(() => playThunderSound(), soundDelayMs);
+            }
+        }
+
+        // 4. Sistema de Artillería Naval (Cañón 76mm, Balística y Retroceso)
+        const activeProjectiles = [];
+        const activeExplosions = [];
+        let cannonRecoilTimer = 0.0;
+
+        function fireNavalCannon() {
+            if (!ship) return;
+            const isKorsar = (currentShipType === 'korsar');
+            const usvX = currentState.x || 0;
+            const usvZ = currentState.y || 0;
+            const heading = ship.rotation.y;
+            const shipY = ship.position.y || 0;
+
+            const fwdOffset = isKorsar ? 14.5 : 3.8;
+            const muzzleH = isKorsar ? 5.2 : 1.25;
+            const mX = usvX + Math.sin(heading) * fwdOffset;
+            const mZ = usvZ + Math.cos(heading) * fwdOffset;
+            const mY = shipY + muzzleH;
+
+            cannonRecoilTimer = 0.28;
+
+            const v0 = 185.0;
+            const elev = 0.23;
+            const vx = v0 * Math.cos(elev) * Math.sin(heading);
+            const vz = v0 * Math.cos(elev) * Math.cos(heading);
+            const vy = v0 * Math.sin(elev);
+
+            const pGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.9, 8);
+            pGeo.rotateX(Math.PI / 2);
+            const pMat = new THREE.MeshBasicMaterial({ color: 0xffedd5 });
+            const pMesh = new THREE.Mesh(pGeo, pMat);
+            pMesh.position.set(mX, mY, mZ);
+            scene.add(pMesh);
+
+            const pLight = new THREE.PointLight(0xf97316, 2.5, 45, 1.5);
+            pLight.position.set(mX, mY, mZ);
+            scene.add(pLight);
+
+            activeProjectiles.push({
+                mesh: pMesh,
+                light: pLight,
+                x: mX, y: mY, z: mZ,
+                vx: vx, vy: vy, vz: vz,
+                life: 0.0,
+                maxLife: 6.0
+            });
+
+            playNavalCannonSound();
+
+            const flashLight = new THREE.PointLight(0xfef08a, 6.0, 35, 1.2);
+            flashLight.position.set(mX, mY, mZ);
+            scene.add(flashLight);
+            setTimeout(() => {
+                scene.remove(flashLight);
+                flashLight.dispose();
+            }, 65);
+        }
+        window.fireNavalCannon = fireNavalCannon;
+
+        function spawnNavalExplosion(x, y, z, isWaterSplash) {
+            if (isWaterSplash === undefined) isWaterSplash = false;
+            const expGroup = new THREE.Group();
+            expGroup.position.set(x, y, z);
+
+            const expGeo = new THREE.SphereGeometry(isWaterSplash ? 2.5 : 4.2, 12, 12);
+            const expMat = new THREE.MeshBasicMaterial({
+                color: isWaterSplash ? 0xbae6fd : 0xf97316,
+                transparent: true,
+                opacity: 0.9
+            });
+            const expMesh = new THREE.Mesh(expGeo, expMat);
+            expGroup.add(expMesh);
+
+            const expLight = new THREE.PointLight(isWaterSplash ? 0x38bdf8 : 0xfacc15, 4.0, 90, 1.2);
+            expGroup.add(expLight);
+
+            scene.add(expGroup);
+            activeExplosions.push({
+                group: expGroup,
+                mesh: expMesh,
+                light: expLight,
+                life: 0.0,
+                maxLife: isWaterSplash ? 0.6 : 0.85,
+                scaleSpeed: isWaterSplash ? 6.0 : 9.5
+            });
+        }
+
+        function updateProjectiles(dt) {
+            if (cannonRecoilTimer > 0) {
+                cannonRecoilTimer -= dt;
+                if (ship && ship.userData && ship.userData.procKorsar && ship.userData.procKorsar.userData.barrel) {
+                    const b = ship.userData.procKorsar.userData.barrel;
+                    const recoilOffset = (cannonRecoilTimer / 0.28) * 0.45;
+                    b.position.z = 14.8 - recoilOffset;
+                }
+            }
+
+            for (let i = activeProjectiles.length - 1; i >= 0; i--) {
+                const p = activeProjectiles[i];
+                p.life += dt;
+                p.vy -= 9.81 * dt;
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.z += p.vz * dt;
+
+                p.mesh.position.set(p.x, p.y, p.z);
+                p.light.position.set(p.x, p.y, p.z);
+                p.mesh.lookAt(p.x + p.vx, p.y + p.vy, p.z + p.vz);
+
+                const oceanY = (typeof waveElevation === 'function') ? waveElevation(p.x, p.z, simTime) : 0;
+                let collided = false;
+
+                if (p.y <= oceanY) {
+                    collided = true;
+                    spawnNavalExplosion(p.x, oceanY + 0.5, p.z, true);
+                    playHullSlamSound(0.9);
+                }
+
+                if (!collided && currentState && currentState.target) {
+                    const tgtX = currentState.target.x || 0;
+                    const tgtZ = currentState.target.y || 0;
+                    if (Math.hypot(p.x - tgtX, p.z - tgtZ) < 14.0 && Math.abs(p.y - 1.5) < 8.0) {
+                        collided = true;
+                        spawnNavalExplosion(p.x, p.y, p.z, false);
+                        playNavalCannonSound();
+                    }
+                }
+
+                if (collided || p.life >= p.maxLife) {
+                    scene.remove(p.mesh);
+                    scene.remove(p.light);
+                    p.mesh.geometry.dispose();
+                    p.mesh.material.dispose();
+                    p.light.dispose();
+                    activeProjectiles.splice(i, 1);
+                }
+            }
+
+            for (let i = activeExplosions.length - 1; i >= 0; i--) {
+                const exp = activeExplosions[i];
+                exp.life += dt;
+                const frac = exp.life / exp.maxLife;
+                const sc = 1.0 + frac * exp.scaleSpeed;
+                exp.group.scale.set(sc, sc, sc);
+                exp.mesh.material.opacity = Math.max(0, 0.9 * (1.0 - frac));
+                exp.light.intensity = Math.max(0, 4.0 * (1.0 - frac));
+
+                if (exp.life >= exp.maxLife) {
+                    scene.remove(exp.group);
+                    exp.mesh.geometry.dispose();
+                    exp.mesh.material.dispose();
+                    exp.light.dispose();
+                    activeExplosions.splice(i, 1);
+                }
+            }
+        }
+
+        // 5. Sistema de Bengalas Iluminantes SAR (Búsqueda y Rescate)
+        const activeFlares = [];
+
+        function launchSarFlare() {
+            if (!ship) return;
+            const usvX = currentState.x || 0;
+            const usvZ = currentState.y || 0;
+            const shipY = ship.position.y || 0;
+
+            const flareGroup = new THREE.Group();
+            flareGroup.position.set(usvX, shipY + 2.0, usvZ);
+
+            const fMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(0.55, 12, 12),
+                new THREE.MeshBasicMaterial({ color: 0xffedd5 })
+            );
+            flareGroup.add(fMesh);
+
+            const chGD = new THREE.ConeGeometry(1.6, 1.2, 12, 1, true);
+            const chMat = new THREE.MeshStandardMaterial({ color: 0xf97316, side: THREE.DoubleSide });
+            const chuteMesh = new THREE.Mesh(chGD, chMat);
+            chuteMesh.position.set(0, 1.6, 0);
+            chuteMesh.visible = false;
+            flareGroup.add(chuteMesh);
+
+            const fLight = new THREE.PointLight(0xfbbf24, 2.8, 950, 1.4);
+            flareGroup.add(fLight);
+
+            scene.add(flareGroup);
+
+            activeFlares.push({
+                group: flareGroup,
+                mesh: fMesh,
+                chute: chuteMesh,
+                light: fLight,
+                x: usvX, y: shipY + 2.0, z: usvZ,
+                vx: (Math.random() - 0.5) * 5.0,
+                vy: 46.0,
+                vz: (Math.random() - 0.5) * 5.0,
+                phase: 'climb',
+                life: 0.0,
+                maxLife: 24.0
+            });
+
+            playFlareLaunchSound();
+        }
+        window.launchSarFlare = launchSarFlare;
+
+        function updateFlares(dt) {
+            for (let i = activeFlares.length - 1; i >= 0; i--) {
+                const fl = activeFlares[i];
+                fl.life += dt;
+
+                if (fl.phase === 'climb') {
+                    fl.vy -= 14.0 * dt;
+                    fl.x += fl.vx * dt;
+                    fl.y += fl.vy * dt;
+                    fl.z += fl.vz * dt;
+                    if (fl.vy <= 0.0 || fl.y >= 115.0) {
+                        fl.phase = 'parachute';
+                        fl.chute.visible = true;
+                        fl.vy = -2.2;
+                    }
+                } else {
+                    const sway = Math.sin(simTime * 2.2 + fl.x) * 1.5;
+                    fl.x += (fl.vx * 0.4 + sway) * dt;
+                    fl.y += fl.vy * dt;
+                    fl.z += fl.vz * 0.4 * dt;
+                    fl.group.rotation.z = Math.sin(simTime * 2.5) * 0.18;
+                }
+
+                fl.group.position.set(fl.x, fl.y, fl.z);
+                fl.light.intensity = 2.4 + Math.sin(simTime * 18.0) * 0.45;
+
+                const oceanY = (typeof waveElevation === 'function') ? waveElevation(fl.x, fl.z, simTime) : 0;
+                if (fl.y <= oceanY || fl.life >= fl.maxLife) {
+                    scene.remove(fl.group);
+                    fl.mesh.geometry.dispose();
+                    fl.mesh.material.dispose();
+                    fl.chute.geometry.dispose();
+                    fl.chute.material.dispose();
+                    fl.light.dispose();
+                    activeFlares.splice(i, 1);
+                }
+            }
+        }
+
+        // 6. Sistema de Waypoints Tácticos 2D / 3D con Balizas Marinas
+        const radarWaypoints = [];
+        const waypointBuoyMeshes = [];
+        let currentWaypointIndex = 0;
+        let autoWaypointNav = false;
+
+        function createWaypointBuoy3D(wx, wy) {
+            const bGroup = new THREE.Group();
+            const wEta = (typeof waveElevation === 'function') ? waveElevation(wx, wy, simTime) : 0;
+            bGroup.position.set(wx, wEta, wy);
+
+            const floatGeo = new THREE.CylinderGeometry(0.9, 1.1, 2.2, 12);
+            const floatMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.35, metalness: 0.2 });
+            const floatMesh = new THREE.Mesh(floatGeo, floatMat);
+            floatMesh.position.y = 1.1;
+            bGroup.add(floatMesh);
+
+            const bandGeo = new THREE.CylinderGeometry(0.92, 0.95, 0.45, 12);
+            const bandMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+            const bandMesh = new THREE.Mesh(bandGeo, bandMat);
+            bandMesh.position.y = 1.5;
+            bGroup.add(bandMesh);
+
+            const mastGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.6, 8);
+            const mastMat = new THREE.MeshStandardMaterial({ color: 0x334155 });
+            const mastMesh = new THREE.Mesh(mastGeo, mastMat);
+            mastMesh.position.y = 2.8;
+            bGroup.add(mastMesh);
+
+            const bLight = new THREE.PointLight(0x38bdf8, 2.0, 45, 1.5);
+            bLight.position.y = 3.6;
+            bGroup.add(bLight);
+
+            scene.add(bGroup);
+            waypointBuoyMeshes.push({ group: bGroup, wx: wx, wy: wy, light: bLight });
+        }
+
+        function clearRadarWaypoints() {
+            radarWaypoints.length = 0;
+            currentWaypointIndex = 0;
+            autoWaypointNav = false;
+            waypointBuoyMeshes.forEach(b => {
+                scene.remove(b.group);
+                b.light.dispose();
+            });
+            waypointBuoyMeshes.length = 0;
+            const autoStatus = document.getElementById('autoWpStatusText');
+            if (autoStatus) {
+                autoStatus.innerText = 'OFF';
+                autoStatus.className = 'text-slate-400';
+            }
+            radarDirty = true;
+        }
+        window.clearRadarWaypoints = clearRadarWaypoints;
+
+        function toggleAutoWaypointNav() {
+            if (radarWaypoints.length === 0) {
+                alert("Primero haz click en la pantalla del Radar IMO para colocar waypoints en la derrota.");
+                return;
+            }
+            autoWaypointNav = !autoWaypointNav;
+            const autoStatus = document.getElementById('autoWpStatusText');
+            if (autoStatus) {
+                autoStatus.innerText = autoWaypointNav ? `ACTIVO (WP${currentWaypointIndex + 1})` : 'OFF';
+                autoStatus.className = autoWaypointNav ? 'text-emerald-400 font-bold' : 'text-slate-400';
+            }
+        }
+        window.toggleAutoWaypointNav = toggleAutoWaypointNav;
+
+        function updateWaypointBuoys(tSim) {
+            waypointBuoyMeshes.forEach(b => {
+                const wY = (typeof waveElevation === 'function') ? waveElevation(b.wx, b.wy, tSim) : 0;
+                b.group.position.y = wY - 0.2;
+                b.group.rotation.x = Math.sin(tSim * 1.8 + b.wx * 0.1) * 0.08;
+                b.group.rotation.z = Math.cos(tSim * 1.5 + b.wy * 0.1) * 0.08;
+                b.light.intensity = (Math.sin(tSim * 6.0) > 0.2) ? 2.5 : 0.0;
+            });
+        }
+
+        if (radarCanvas) {
+            radarCanvas.addEventListener('click', (e) => {
+                const rect = radarCanvas.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const clickY = e.clientY - rect.top;
+                const W = radarCanvas.width;
+                const H = radarCanvas.height;
+                const cx = W / 2;
+                const cy = H / 2;
+                const scale = (W / 2) / radarRangeMeters;
+
+                const usvX = (currentState && currentState.x !== undefined) ? currentState.x : 0;
+                const usvY = (currentState && currentState.y !== undefined) ? currentState.y : 0;
+                const usvPsi = (currentState && currentState.psi !== undefined) ? currentState.psi : 0;
+
+                let wx = 0, wy = 0;
+                if (radarOrientationMode === "H-UP") {
+                    const stbd = (clickX - cx) / scale;
+                    const fwd = -(clickY - cy) / scale;
+                    const hdg = Math.PI / 2 - usvPsi;
+                    const dx = fwd * Math.sin(hdg) + stbd * Math.cos(hdg);
+                    const dy = fwd * Math.cos(hdg) - stbd * Math.sin(hdg);
+                    wx = usvX + dx;
+                    wy = usvY + dy;
+                } else {
+                    const dx = (clickX - cx) / scale;
+                    const dy = -(clickY - cy) / scale;
+                    wx = usvX + dx;
+                    wy = usvY + dy;
+                }
+
+                radarWaypoints.push({ x: wx, y: wy });
+                createWaypointBuoy3D(wx, wy);
+                radarDirty = true;
+            });
+        }
+
+        const btnFire = document.getElementById('btnNavFire');
+        if (btnFire) btnFire.addEventListener('click', fireNavalCannon);
+        const btnFlare = document.getElementById('btnNavFlare');
+        if (btnFlare) btnFlare.addEventListener('click', launchSarFlare);
+        const btnWeather = document.getElementById('btnNavWeather');
+        if (btnWeather) btnWeather.addEventListener('click', toggleWeatherSystem);
+        const btnAutoWp = document.getElementById('btnAutoWp');
+        if (btnAutoWp) btnAutoWp.addEventListener('click', toggleAutoWaypointNav);
+        const btnClearWp = document.getElementById('btnClearWp');
+        if (btnClearWp) btnClearWp.addEventListener('click', clearRadarWaypoints);
 
         /* -------------------------------------------------------------------------
            12. BUCLE PRINCIPAL DE ANIMACIÓN Y RENDERIZADO
@@ -6194,7 +6965,40 @@ class Water extends Mesh {
             // Modo Autónomo / Fallback si el WebSocket no está conectado
             if (!ws || ws.readyState !== WebSocket.OPEN) {
                 const thr = currentState.thrust_actual !== undefined ? currentState.thrust_actual : 5000;
-                const rud = currentState.rudder_actual !== undefined ? currentState.rudder_actual : 0;
+                let rud = currentState.rudder_actual !== undefined ? currentState.rudder_actual : 0;
+
+                // Guía Autónoma por Waypoints Tácticos (Autopilot Derrota)
+                if (autoWaypointNav && radarWaypoints.length > 0 && currentWaypointIndex < radarWaypoints.length) {
+                    const targetWp = radarWaypoints[currentWaypointIndex];
+                    const dwpX = targetWp.x - (currentState.x || 200);
+                    const dwpY = targetWp.y - (currentState.y || 300);
+                    const distToWp = Math.hypot(dwpX, dwpY);
+                    if (distToWp < 14.0) {
+                        currentWaypointIndex++;
+                        if (currentWaypointIndex >= radarWaypoints.length) {
+                            autoWaypointNav = false;
+                            const wpStatus = document.getElementById('autoWpStatusText');
+                            if (wpStatus) { wpStatus.innerText = 'FIN'; wpStatus.className = 'text-emerald-400 font-bold'; }
+                        } else {
+                            const wpStatus = document.getElementById('autoWpStatusText');
+                            if (wpStatus) { wpStatus.innerText = `WP${currentWaypointIndex + 1}`; }
+                        }
+                    } else {
+                        const desiredPsi = Math.atan2(dwpY, dwpX);
+                        let psiErr = desiredPsi - (currentState.psi || 0);
+                        while (psiErr > Math.PI) psiErr -= Math.PI * 2;
+                        while (psiErr < -Math.PI) psiErr += Math.PI * 2;
+                        const targetRudDeg = Math.max(-35, Math.min(35, psiErr * 180 / Math.PI * 1.6));
+                        const rudEl = document.getElementById('rudderRange');
+                        if (rudEl) {
+                            rudEl.value = targetRudDeg.toFixed(0);
+                            const rudValEl = document.getElementById('rudderVal');
+                            if (rudValEl) rudValEl.innerText = rudEl.value;
+                        }
+                        rud = targetRudDeg * Math.PI / 180.0;
+                        currentState.rudder_actual = rud;
+                    }
+                }
 
                 if (currentShipType === 'korsar') {
                     // Física Naval de la Corbeta Korsar (500 toneladas · Desplazamiento)
@@ -6207,8 +7011,16 @@ class Water extends Mesh {
                     const targetRate = (rud / 0.6108) * 0.105 * spdRatio;
                     currentTurnRateKorsar += (targetRate - currentTurnRateKorsar) * Math.min(1.0, dt * 0.90);
                     currentState.psi = ((currentState.psi || 0) + currentTurnRateKorsar * dt + Math.PI * 2) % (Math.PI * 2);
-                    currentState.x = (currentState.x || 200) + (currentState.u || 0) * Math.cos(currentState.psi) * dt;
-                    currentState.y = (currentState.y || 300) + (currentState.u || 0) * Math.sin(currentState.psi) * dt;
+
+                    // Abatimiento por viento sobre la superestructura
+                    const windSpd = isStormWeather ? 14.0 : 6.0;
+                    const windDir = 0.85;
+                    const leewayK = 0.035;
+                    const leewayVx = windSpd * Math.cos(windDir) * leewayK;
+                    const leewayVy = windSpd * Math.sin(windDir) * leewayK;
+
+                    currentState.x = (currentState.x || 200) + ((currentState.u || 0) * Math.cos(currentState.psi) + leewayVx) * dt;
+                    currentState.y = (currentState.y || 300) + ((currentState.u || 0) * Math.sin(currentState.psi) + leewayVy) * dt;
                     currentState.t = (currentState.t || 0) + dt;
                     currentState.theta = 0.008 * ((currentState.u || 0) / maxKorsarSpeed);
                     currentState.phi = Math.sin(currentState.t * 1.5) * 0.02 - currentTurnRateKorsar * 0.12;
@@ -6219,8 +7031,15 @@ class Water extends Mesh {
                     currentState.u = (currentState.u || 0) + (targetU - (currentState.u || 0)) * Math.min(1.0, dt * 2.2);
                     const turnRate = rud * ((currentState.u || 0) / 7.0 + 0.35) * Math.max(0.6, thr / 2500.0);
                     currentState.psi = ((currentState.psi || 0) + turnRate * dt + Math.PI * 2) % (Math.PI * 2);
-                    currentState.x = (currentState.x || 200) + (currentState.u || 0) * Math.cos(currentState.psi) * dt;
-                    currentState.y = (currentState.y || 300) + (currentState.u || 0) * Math.sin(currentState.psi) * dt;
+
+                    const windSpd = isStormWeather ? 14.0 : 6.0;
+                    const windDir = 0.85;
+                    const leewayK = 0.055;
+                    const leewayVx = windSpd * Math.cos(windDir) * leewayK;
+                    const leewayVy = windSpd * Math.sin(windDir) * leewayK;
+
+                    currentState.x = (currentState.x || 200) + ((currentState.u || 0) * Math.cos(currentState.psi) + leewayVx) * dt;
+                    currentState.y = (currentState.y || 300) + ((currentState.u || 0) * Math.sin(currentState.psi) + leewayVy) * dt;
                     currentState.t = (currentState.t || 0) + dt;
                     currentState.theta = Math.sin(currentState.t * 1.5) * 0.03;
                     currentState.phi = Math.sin(currentState.t * 2.1) * 0.04 + turnRate * 0.08;
@@ -6230,6 +7049,18 @@ class Water extends Mesh {
                 if (currentState.environment) {
                     currentState.environment.wave_elevation = etaLocal;
                 }
+
+                // Detección de pantocazo (Hull Slamming) al descender de crestas
+                const vertSpeed = (etaLocal - (prevEtaLocal || 0)) / Math.max(0.001, dt);
+                if (prevEtaLocal !== undefined && vertSpeed < -2.2 && (currentState.u || 0) > 6.0) {
+                    const nowMs = performance.now();
+                    if (nowMs - lastHullSlamTime > 1800) {
+                        playHullSlamSound(Math.min(2.0, Math.abs(vertSpeed) / 1.8));
+                        lastHullSlamTime = nowMs;
+                        triggerScreenDropBurst(6);
+                    }
+                }
+                prevEtaLocal = etaLocal;
 
                 if (currentState.merchant) {
                     currentState.merchant.x += (currentState.merchant.u || 5.6) * Math.cos(currentState.merchant.psi || 0) * dt;
@@ -7030,6 +7861,43 @@ class Water extends Mesh {
 
                 const lookY = shipY + (isKorsar ? 3.8 : 0.9);
                 camera.lookAt(usvX, lookY, usvZ);
+            } else if (cameraMode === "fpv") {
+                // Modo 5: FPV TÁCTICO (Cámara de Ojiva / Proa Extrema, ángulo rasante hacia adelante)
+                controls.enabled = false;
+                const bowDist = isKorsar ? 26.0 : (isSeaBaby ? 3.3 : 3.8);
+                const bowHeight = isKorsar ? 5.2 : (isSeaBaby ? 0.95 : 1.15);
+                const camX = usvX + Math.sin(heading) * bowDist;
+                const camZ = usvZ + Math.cos(heading) * bowDist;
+                const camY = shipY + bowHeight;
+                camera.position.set(camX, camY, camZ);
+
+                const fwdLook = 80.0;
+                const lookY = shipY + (isKorsar ? 4.5 : 0.95);
+                camera.lookAt(usvX + Math.sin(heading) * fwdLook, lookY, usvZ + Math.cos(heading) * fwdLook);
+
+                const fpvRng = document.getElementById('fpvRangeBadge');
+                if (fpvRng && currentState && currentState.target) {
+                    const tgtX = currentState.target.x || 0;
+                    const tgtZ = currentState.target.y || 0;
+                    const d = Math.hypot(tgtX - usvX, tgtZ - usvZ);
+                    fpvRng.innerText = `RNG TO TGT: ${d.toFixed(1)} m`;
+                }
+            }
+
+            // Actualización de Sistemas Tácticos Navales
+            if (!isSimPaused) {
+                updateProjectiles(dt);
+                updateFlares(dt);
+                updateWeatherSystem(dt);
+                updateScreenDrops(dt);
+                updateWaypointBuoys(simTime);
+
+                // Parpadeo del estrobo táctico (cada 1.0s)
+                if (ship && ship.userData && ship.userData.strobe) {
+                    ship.userData.strobe.visible = (simTime % 1.0 < 0.15);
+                }
+            } else {
+                updateScreenDrops(0.016);
             }
 
             renderer.render(scene, camera);
