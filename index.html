@@ -766,10 +766,13 @@
             </div>
 
             <div class="flex gap-2 pt-1">
-                <button id="debriefRepeatBtn" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold py-1.5 rounded-lg border border-slate-700 transition">
+                <button id="debriefContinueBtn" onclick="cancelAutonomy()" class="flex-1 bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-white text-xs font-bold py-1.5 rounded-lg border border-emerald-500 transition shadow flex items-center justify-center gap-1 cursor-pointer">
+                    <span>🕹️</span> <span>Continuar [M]</span>
+                </button>
+                <button id="debriefRepeatBtn" class="flex-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 text-xs font-bold py-1.5 rounded-lg border border-slate-700 transition cursor-pointer">
                     Repetir [R]
                 </button>
-                <button id="debriefNextBtn" class="flex-1 bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold py-1.5 rounded-lg transition shadow-lg">
+                <button id="debriefNextBtn" class="flex-1 bg-cyan-700 hover:bg-cyan-600 active:scale-95 text-white text-xs font-bold py-1.5 rounded-lg transition shadow-lg cursor-pointer">
                     Siguiente ⏩
                 </button>
             </div>
@@ -5460,6 +5463,18 @@ class Water extends Mesh {
                 notifyMooringFastAlert();
             }
 
+            // Anulación instantánea de APN/Autopiloto al intervenir manualmente en los mandos
+            const isCollision = !!(currentState.detonated && currentState.impact_stats && currentState.impact_stats.status && currentState.impact_stats.status.includes("COLISIÓN"));
+            if ((currentState.mode === "TERMINAL_APN" || currentState.mode === "AUTO_DOCK") && extra.mode === undefined && extra.select_mission === undefined) {
+                extra.mode = "MANUAL";
+                extra.manual_override = true;
+                currentState.mode = "MANUAL";
+                setAutonomyLock(false, false);
+            }
+            if (!isCollision && currentState.detonated && extra.reset === undefined && extra.select_mission === undefined) {
+                currentState.detonated = false;
+            }
+
             if (ws && ws.readyState === WebSocket.OPEN) {
                 try {
                     const payload = {
@@ -5527,9 +5542,16 @@ class Water extends Mesh {
                         lockBadge.className = "text-[8.5px] px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-600 font-bold animate-pulse";
                         if (thrRange) thrRange.value = 0;
                         if (thrVal) thrVal.innerText = "0 (AVERIADO)";
+                        if (controlsGroup) controlsGroup.classList.add('opacity-40', 'pointer-events-none');
+                        if (rudRange) rudRange.disabled = true;
+                        if (thrRange) thrRange.disabled = true;
                     } else {
-                        lockBadge.innerText = "LOCK APN/AUTO";
-                        lockBadge.className = "text-[8.5px] px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800 font-bold animate-pulse";
+                        lockBadge.innerText = "🚀 APN / AUTÓNOMO (MUEVA MANDOS PARA MANUAL)";
+                        lockBadge.className = "text-[8.5px] px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-600 font-bold animate-pulse";
+                        if (controlsGroup) controlsGroup.classList.remove('pointer-events-none');
+                        if (controlsGroup) controlsGroup.classList.add('opacity-85');
+                        if (rudRange) rudRange.disabled = false;
+                        if (thrRange) thrRange.disabled = false;
                     }
                 }
                 if (cancelBtn) {
@@ -5539,13 +5561,10 @@ class Water extends Mesh {
                         cancelBtn.classList.remove('hidden');
                     }
                 }
-                if (controlsGroup) controlsGroup.classList.add('opacity-40', 'pointer-events-none');
-                if (rudRange) rudRange.disabled = true;
-                if (thrRange) thrRange.disabled = true;
             } else {
                 if (lockBadge) lockBadge.classList.add('hidden');
                 if (cancelBtn) cancelBtn.classList.add('hidden');
-                if (controlsGroup) controlsGroup.classList.remove('opacity-40', 'pointer-events-none');
+                if (controlsGroup) controlsGroup.classList.remove('opacity-40', 'opacity-85', 'pointer-events-none');
                 if (rudRange) rudRange.disabled = false;
                 if (thrRange) thrRange.disabled = false;
             }
@@ -5572,8 +5591,18 @@ class Water extends Mesh {
         function cancelAutonomy() {
             sendControls({ mode: "MANUAL", manual_override: true });
             currentState.mode = "MANUAL";
-            setAutonomyLock(false);
+            if (!currentState.impact_stats || !currentState.impact_stats.status || !currentState.impact_stats.status.includes("COLISIÓN")) {
+                currentState.detonated = false;
+            }
+            setAutonomyLock(false, false);
+            const lockBadge = document.getElementById('controlsLockBadge');
+            if (lockBadge) lockBadge.classList.add('hidden');
+            const cancelBtn = document.getElementById('cancelAutonomyBtn');
+            if (cancelBtn) cancelBtn.classList.add('hidden');
+            document.getElementById('missionDebriefModal').classList.add('hidden');
+            announceTacticalVoice("Mandos manuales activos.");
         }
+        window.cancelAutonomy = cancelAutonomy;
 
         /* -------------------------------------------------------------------------
            11. GESTIÓN DE INTERFAZ, PANELES DE MISIÓN Y DEBRIEFING MODAL
@@ -5756,8 +5785,8 @@ class Water extends Mesh {
             const isCollision = !!(s.detonated && s.impact_stats && s.impact_stats.status && s.impact_stats.status.includes("COLISIÓN"));
 
             // Enclavamiento de Mandos según Autopiloto o Buque Inoperativo
-            const isAuto = (s.mode === "TERMINAL_APN" || s.mode === "AUTO_DOCK") && !s.detonated;
-            const isLocked = isAuto || s.detonated;
+            const isAuto = (s.mode === "TERMINAL_APN" || s.mode === "AUTO_DOCK");
+            const isLocked = isAuto || isCollision;
             setAutonomyLock(isLocked, isCollision);
 
             // Estado del LED en la barra superior
@@ -8387,6 +8416,20 @@ class Water extends Mesh {
             if (currentState.target) {
                 const t = currentState.target;
                 const tType = t.target_type || "PATROL_COMBAT";
+
+                // Desacople automático de APN al rebasar el punto de misión o neutralizar el blanco
+                if (currentState.mode === "TERMINAL_APN" && ship) {
+                    const dxT = (t.x || 0) - ship.position.x;
+                    const dzT = (t.y || 0) - ship.position.z;
+                    const distT = Math.hypot(dxT, dzT);
+                    const losT = Math.atan2(dzT, dxT);
+                    const brgDiffT = Math.atan2(Math.sin(losT - ship.rotation.y), Math.cos(losT - ship.rotation.y));
+                    const isBehindT = Math.abs(brgDiffT) > 1.95;
+                    const isDoneT = !!(t.destroyed || t.rescued || t.docked || currentState.detonated);
+                    if ((distT <= 25.0 && isBehindT) || isDoneT) {
+                        cancelAutonomy();
+                    }
+                }
 
                 if (tType === "DOCK") {
                     targetGroup.visible = false;
