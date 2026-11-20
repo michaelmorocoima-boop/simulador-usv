@@ -145,19 +145,19 @@
                 <button class="menu-btn bg-slate-900 hover:bg-slate-800 text-purple-300 px-2 sm:px-2.5 py-1 rounded-lg border border-purple-800/80 transition flex items-center gap-1 shadow">
                     <span>📷 Cámara</span> <span class="text-[8px] text-purple-400">▼</span>
                 </button>
-                <div class="dropdown-menu hidden absolute top-full left-0 mt-1 w-48 bg-slate-950/95 backdrop-blur-xl border border-purple-500/40 rounded-xl p-1.5 shadow-2xl z-50 space-y-1">
-                    <div class="text-[9px] text-slate-400 font-bold px-2 py-0.5 border-b border-slate-800">PUNTOS DE VISTA</div>
-                    <button class="nav-cam-btn w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-purple-300 font-bold transition text-[10px]" data-cam="follow">
-                        🎥 Seguimiento
+                <div class="dropdown-menu hidden absolute top-full left-0 mt-1 w-52 bg-slate-950/95 backdrop-blur-xl border border-purple-500/40 rounded-xl p-1.5 shadow-2xl z-50 space-y-1">
+                    <div class="text-[9px] text-slate-400 font-bold px-2 py-0.5 border-b border-slate-800">MODOS DE CÁMARA (LA GUAIRA)</div>
+                    <button class="nav-cam-btn w-full text-left px-2 py-1.5 rounded-lg bg-purple-950/80 border border-purple-500/60 text-purple-200 font-bold transition text-[10px]" data-cam="orbital">
+                        🌐 1. Orbital (Libre 360°)
                     </button>
-                    <button class="nav-cam-btn w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 font-bold transition text-[10px]" data-cam="bow">
-                        🚢 Proa / Puente USV
+                    <button class="nav-cam-btn w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 font-bold transition text-[10px]" data-cam="bridge">
+                        🚢 2. Puente de Mando (1ª Persona)
                     </button>
-                    <button class="nav-cam-btn w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 font-bold transition text-[10px]" data-cam="top">
-                        🦅 Cenital Táctica
+                    <button class="nav-cam-btn w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 font-bold transition text-[10px]" data-cam="chase">
+                        🚀 3. Persecución (Dinámica 3ªP)
                     </button>
-                    <button class="nav-cam-btn w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 font-bold transition text-[10px]" data-cam="free">
-                        🌐 Libre 360°
+                    <button class="nav-cam-btn w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 font-bold transition text-[10px]" data-cam="cinematic">
+                        🎬 4. Cinemática (Aérea 360°)
                     </button>
                 </div>
             </div>
@@ -316,7 +316,7 @@
                             <span class="text-slate-400 font-bold text-[9px] flex items-center gap-1">📹 ESTADO DE CÁMARA</span>
                             <button id="closeCamHudBtn" class="text-slate-400 hover:text-rose-400 text-[11px] leading-none px-1 rounded hover:bg-slate-800 cursor-pointer transition" title="Ocultar cuadro (Reactivar en menú Vistas)">✕</button>
                         </div>
-                        <div>Cámara: <span id="camInfoText" class="text-emerald-400 font-bold">Seguimiento</span> · Tecla C</div>
+                        <div>Cámara: <span id="camInfoText" class="text-emerald-400 font-bold">Orbital (Libre 360°)</span> · Tecla C</div>
                         <div>Superficie: <span id="waveInfoText" class="text-sky-400 font-bold">JONSWAP (γ=3.3)</span></div>
                         <div>Corriente: <span id="currentInfoText" class="text-cyan-300 font-bold">0.0 m/s @ 0.0°</span> (200 pts)</div>
                         <div>Blanco: <span id="targetStatusText" class="text-amber-400 font-bold">PATRULLERO (15 kn · EVASIÓN)</span></div>
@@ -1098,7 +1098,21 @@
         controls.dampingFactor = 0.08;
         controls.maxPolarAngle = Math.PI / 2.05;
 
-        let cameraMode = "follow";
+        // Modos de Cámara idénticos al Simulador de La Guaira:
+        // 0: 'orbital' (Libre 360° con arrastre dinámico del buque)
+        // 1: 'bridge' (Puente de mando / Cockpit 1ª persona con horizonte estabilizado)
+        // 2: 'chase' (Persecución dinámica en 3ª persona adaptativa con FOV dinámico)
+        // 3: 'cinematic' (Cinemática aérea circular 360°)
+        const CAM_MODES = ['orbital', 'bridge', 'chase', 'cinematic'];
+        const CAM_LABELS = {
+            orbital: 'Orbital (Libre 360°)',
+            bridge: 'Puente de Mando',
+            chase: 'Persecución Dinámica',
+            cinematic: 'Cinemática Aérea'
+        };
+        let cameraMode = 'orbital';
+        let camModeIndex = 0;
+        const prevCamShipPos = new THREE.Vector3(220, 0, 350);
 
         // 1. Cúpula Celeste Atmosférica (Sistema de Bóveda Escotópica con Estrellas Embebidas)
         const SKY_RADIUS = 15500;
@@ -5902,15 +5916,59 @@ class Water extends Mesh {
         }
         document.getElementById('audioBtn').addEventListener('click', toggleAudio);
 
-        function toggleCameraMode() {
-            cameraMode = cameraMode === "follow" ? "free" : "follow";
-            const camInfo = document.getElementById('camInfoText');
-            if (camInfo) camInfo.innerText = cameraMode === "follow" ? "Seguimiento" : "Libre (Orbital)";
-            controls.enabled = (cameraMode === "free");
-            if (cameraMode === "free" && ship) {
-                controls.target.set(ship.position.x, ship.position.y + 1.2, ship.position.z);
+        function setCameraMode(mode) {
+            if (typeof mode === 'number') {
+                camModeIndex = ((mode % 4) + 4) % 4;
+                cameraMode = CAM_MODES[camModeIndex];
+            } else {
+                const map = {
+                    free: 'orbital',
+                    orbital: 'orbital',
+                    bow: 'bridge',
+                    bridge: 'bridge',
+                    follow: 'chase',
+                    chase: 'chase',
+                    top: 'cinematic',
+                    cinematic: 'cinematic'
+                };
+                cameraMode = map[mode] || 'orbital';
+                camModeIndex = CAM_MODES.indexOf(cameraMode);
+                if (camModeIndex < 0) camModeIndex = 0;
             }
+
+            const label = CAM_LABELS[cameraMode] || cameraMode;
+            const el = document.getElementById('camInfoText');
+            if (el) el.innerText = label;
+
+            controls.enabled = (cameraMode === 'orbital');
+            if (cameraMode === 'orbital') {
+                const sX = (currentState && currentState.x !== undefined) ? currentState.x : 220;
+                const sZ = (currentState && currentState.y !== undefined) ? currentState.y : 350;
+                const sY = (ship ? ship.position.y : 0) + 1.2;
+                if (camera.position.distanceTo(controls.target) < 10 || camera.position.distanceTo(controls.target) > 500) {
+                    camera.position.set(sX + 26, sY + 14, sZ + 32);
+                }
+                controls.target.set(sX, sY, sZ);
+                prevCamShipPos.set(sX, sY, sZ);
+            }
+
+            const fovs = { orbital: 55, bridge: 70, chase: 55, cinematic: 48 };
+            camera.fov = fovs[cameraMode] || 55;
+            camera.updateProjectionMatrix();
+
+            document.querySelectorAll('.nav-cam-btn').forEach(btn => {
+                const isMatch = (btn.dataset.cam === cameraMode);
+                btn.className = isMatch
+                    ? "nav-cam-btn w-full text-left px-2 py-1.5 rounded-lg bg-purple-950/80 border border-purple-500/60 text-purple-200 font-bold transition text-[10px]"
+                    : "nav-cam-btn w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-800 text-slate-200 font-bold transition text-[10px]";
+            });
         }
+        window.setCameraMode = setCameraMode;
+
+        function toggleCameraMode() {
+            setCameraMode(camModeIndex + 1);
+        }
+        window.toggleCameraMode = toggleCameraMode;
 
         window.addEventListener('keydown', (e) => {
             const k = (e.key || '').toLowerCase();
@@ -6861,58 +6919,90 @@ class Water extends Mesh {
                 }
             }
 
-            // 5. Cámara Multimodal
-            if (cameraMode === "follow" && ship !== null) {
-                const heading = ship.rotation.y;
-                const isKorsar = (currentShipType === 'korsar');
-                const isSeaBaby = (currentShipType === 'seababy');
-                const curThr = (currentState.thrust_actual !== undefined ? currentState.thrust_actual : 2000);
-                const highThrRatio = Math.min(1.0, Math.max(0.0, (curThr - 2000) / 6500.0));
-                const highSpdRatio = Math.min(1.0, Math.max(0.0, usvSpeed / 14.0));
-                const speedBoost = Math.max(highThrRatio, highSpdRatio);
+            // 5. Cámara Multimodal (4 Modos de La Guaira: Orbital, Puente de Mando, Persecución, Cinemática)
+            const isKorsar = (currentShipType === 'korsar');
+            const isSeaBaby = (currentShipType === 'seababy');
+            const heading = ship ? ship.rotation.y : 0.0;
+            const shipY = ship ? ship.position.y : 0.0;
 
-                // Elevación adaptativa para alta velocidad (8500N): la cámara se aleja y eleva
-                // de modo que las olas y la estela nunca tapen el USV
-                const baseDist = isKorsar ? 34.0 : (isSeaBaby ? 13.0 : 14.5);
-                const baseHeight = isKorsar ? 12.0 : (isSeaBaby ? 6.2 : 6.8);
-                const distBehind = baseDist + (isKorsar ? 4.0 : 3.5) * speedBoost;
-                const camHeight = baseHeight + (isKorsar ? 3.0 : 2.5) * speedBoost;
+            if (cameraMode === "orbital") {
+                // Modo 0: ORBITAL (Libre 360° con arrastre dinámico del buque)
+                const dx = usvX - prevCamShipPos.x;
+                const dz = usvZ - prevCamShipPos.z;
+                if (Math.hypot(dx, dz) > 140) {
+                    const baseDist = isKorsar ? 45.0 : 26.0;
+                    camera.position.set(usvX + baseDist, shipY + 16.0, usvZ + baseDist);
+                    controls.target.set(usvX, shipY + (isKorsar ? 4.0 : 1.2), usvZ);
+                } else {
+                    camera.position.x += dx;
+                    camera.position.z += dz;
+                    controls.target.x += dx;
+                    controls.target.z += dz;
+                }
+                controls.target.y = shipY + (isKorsar ? 4.0 : 1.2);
+                controls.update();
+                prevCamShipPos.set(usvX, shipY, usvZ);
+            } else if (cameraMode === "bridge") {
+                // Modo 1: PUENTE DE MANDO (Cockpit 1ª Persona con horizonte estabilizado)
+                controls.enabled = false;
+                const fwdDist = isKorsar ? 12.0 : (isSeaBaby ? 1.4 : 2.1);
+                const eyeHeight = isKorsar ? 7.8 : (isSeaBaby ? 1.05 : 1.45);
+                const camX = usvX + Math.sin(heading) * fwdDist;
+                const camZ = usvZ + Math.cos(heading) * fwdDist;
+                const camY = shipY + eyeHeight;
+                camera.position.set(camX, camY, camZ);
 
-                const targetCamX = usvX - Math.sin(heading) * distBehind;
-                const targetCamZ = usvZ - Math.cos(heading) * distBehind;
-                
-                // Garantizar que la cámara siempre esté por encima de la cresta de ola en su punto
-                const waveAtCam = waveElevation(targetCamX, targetCamZ, simTime);
-                const targetCamY = Math.max(ship.position.y + camHeight, waveAtCam + 3.5);
+                const lookDist = 55.0;
+                const lookY = shipY + (isKorsar ? 6.5 : 1.1);
+                camera.lookAt(usvX + Math.sin(heading) * lookDist, lookY, usvZ + Math.cos(heading) * lookDist);
+                const rollVal = (currentState.phi || 0);
+                camera.rotateZ(-rollVal * 0.32);
+            } else if (cameraMode === "chase") {
+                // Modo 2: PERSECUCIÓN DINÁMICA (3ª Persona con FOV y distancia adaptativos a la velocidad)
+                controls.enabled = false;
+                const maxSpd = isKorsar ? 16.0 : 34.0;
+                const spN = Math.min(1.0, Math.max(0.0, usvSpeed / maxSpd));
+                const baseDist = isKorsar ? 36.0 : (isSeaBaby ? 13.0 : 15.0);
+                const extraDist = isKorsar ? 14.0 : 12.0;
+                const dst = baseDist + spN * extraDist;
+                const baseHeight = isKorsar ? 12.5 : (isSeaBaby ? 5.8 : 6.5);
+                const desYBase = shipY + baseHeight + spN * 2.8;
 
-                _vCamTarget.set(targetCamX, targetCamY, targetCamZ);
+                const desX = usvX - Math.sin(heading) * dst;
+                const desZ = usvZ - Math.cos(heading) * dst;
+                const waveAtCam = waveElevation(desX, desZ, simTime);
+                const desY = Math.max(desYBase, waveAtCam + 2.4);
+
+                _vCamTarget.set(desX, desY, desZ);
                 if (!cameraInitialized) {
                     camera.position.copy(_vCamTarget);
                     cameraInitialized = true;
                 } else {
-                    camera.position.lerp(_vCamTarget, 0.12);
+                    const lerpFactor = 1.0 - Math.exp(-Math.max(0.016, dt) * 3.2);
+                    camera.position.lerp(_vCamTarget, Math.min(0.25, lerpFactor));
                 }
-                controls.target.set(usvX, ship.position.y + 0.45, usvZ);
-                
-                const lookDist = (isKorsar ? 5.0 : 1.6) + speedBoost * 1.5;
-                const lookHeight = (isKorsar ? 2.2 : 0.65) + speedBoost * 0.5;
-                camera.lookAt(usvX + Math.sin(heading) * lookDist, ship.position.y + lookHeight, usvZ + Math.cos(heading) * lookDist);
-            } else if (cameraMode === "bow" && ship !== null) {
-                const heading = ship.rotation.y;
-                const isKorsar = (currentShipType === 'korsar');
-                const isSeaBaby = (currentShipType === 'seababy');
-                const bowFwd = isKorsar ? 16.0 : (isSeaBaby ? 1.5 : 2.4);
-                const camX = usvX + Math.sin(heading) * bowFwd;
-                const camZ = usvZ + Math.cos(heading) * bowFwd;
-                const camY = ship.position.y + (isKorsar ? 7.0 : (isSeaBaby ? 1.1 : 1.5));
-                camera.position.set(camX, camY, camZ);
-                camera.lookAt(usvX + Math.sin(heading) * 45.0, ship.position.y + (isKorsar ? 4.5 : (isSeaBaby ? 0.8 : 1.2)), usvZ + Math.cos(heading) * 45.0);
-            } else if (cameraMode === "top" && ship !== null) {
-                _vCamTarget.set(usvX, 80.0, usvZ);
-                camera.position.lerp(_vCamTarget, 0.1);
-                camera.lookAt(usvX, 0, usvZ);
-            } else if (cameraMode === "free") {
-                controls.update();
+
+                // FOV dinámico de velocidad (55° a 64°)
+                camera.fov = 55.0 + spN * 9.0;
+                camera.updateProjectionMatrix();
+
+                const lookDist = (isKorsar ? 8.0 : 3.0) + spN * 4.0;
+                const lookY = shipY + (isKorsar ? 3.0 : 0.85);
+                camera.lookAt(usvX + Math.sin(heading) * lookDist, lookY, usvZ + Math.cos(heading) * lookDist);
+            } else if (cameraMode === "cinematic") {
+                // Modo 3: CINEMÁTICA (Toma aérea panorámica 360° circular automatizada)
+                controls.enabled = false;
+                const angle = simTime * 0.16;
+                const orbitRadius = isKorsar ? 58.0 : 28.0;
+                const baseOrbitH = (isKorsar ? 16.0 : 7.8) + Math.sin(simTime * 0.35) * 2.2;
+
+                const camX = usvX + Math.cos(angle) * orbitRadius;
+                const camZ = usvZ + Math.sin(angle) * orbitRadius;
+                const waveAtCam = waveElevation(camX, camZ, simTime);
+                camera.position.set(camX, Math.max(shipY + baseOrbitH, waveAtCam + 2.5), camZ);
+
+                const lookY = shipY + (isKorsar ? 3.8 : 0.9);
+                camera.lookAt(usvX, lookY, usvZ);
             }
 
             renderer.render(scene, camera);
@@ -6941,15 +7031,6 @@ class Water extends Mesh {
         window.addEventListener('resize', updateCanvasSize);
         window.addEventListener('orientationchange', () => setTimeout(updateCanvasSize, 250));
 
-        // Función de Selección de Cámara
-        function setCameraMode(mode) {
-            cameraMode = mode;
-            const labels = { follow: "Seguimiento", bow: "Proa USV", top: "Cenital", free: "Libre 360°" };
-            const txt = labels[mode] || mode;
-            const el = document.getElementById('camInfoText');
-            if (el) el.innerText = txt;
-            controls.enabled = (cameraMode === "free");
-        }
 
         // Gestión de la Barra de Menús Táctica (Dropdowns)
         document.querySelectorAll('.menu-btn').forEach(btn => {
