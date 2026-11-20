@@ -1453,6 +1453,15 @@
         scene.add(dirLight);
         scene.add(dirLight.target);
 
+        // Luces Tácticas Permanentes Pre-asignadas (Cero Recompilaciones de Shaders en Disparos/Bengalas)
+        const tacticalCombatLight = new THREE.PointLight(0xfef08a, 0.0, 60, 1.2);
+        tacticalCombatLight.position.set(0, 0, 0);
+        scene.add(tacticalCombatLight);
+
+        const tacticalFlareLight = new THREE.PointLight(0xfbbf24, 0.0, 950, 1.4);
+        tacticalFlareLight.position.set(0, 0, 0);
+        scene.add(tacticalFlareLight);
+
         // 4. OCÉANO TÁCTICO PRINCIPAL (2400m x 2400m, Bi-Nivel, 32 olas JONSWAP)
         const WAVE_UNROLL = isMobile ? 20 : 32;
         const tacticalSegs = isMobile ? 128 : 192;
@@ -6814,6 +6823,15 @@ class Water extends Mesh {
         let sprayGain = null;
         let isAudioPlaying = false;
 
+        const noiseBufferCache = new Map();
+        function getCachedNoiseBuffer(ctx, durationSeconds) {
+            const key = Math.round(durationSeconds * 100);
+            if (!noiseBufferCache.has(key)) {
+                noiseBufferCache.set(key, createNoiseBuffer(ctx, durationSeconds));
+            }
+            return noiseBufferCache.get(key);
+        }
+
         function createNoiseBuffer(ctx, durationSeconds) {
             const bufferSize = ctx.sampleRate * durationSeconds;
             const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
@@ -7058,8 +7076,8 @@ class Water extends Mesh {
             if (k === ' ' || k === 'x') { document.getElementById('btnRudZero').click(); return; }
             if (k === 'z') { document.getElementById('btnThrStop').click(); return; }
             if (k === 'v') { cycleTacticalVision(); return; }
-            if (k === 'f') { fireNavalCannon(); return; }
-            if (k === 'b') { launchSarFlare(); return; }
+            if (k === 'f') { if (!e.repeat) fireNavalCannon(); return; }
+            if (k === 'b') { if (!e.repeat) launchSarFlare(); return; }
 
             const rudEl = document.getElementById('rudderRange');
             const thrEl = document.getElementById('thrustRange');
@@ -7113,8 +7131,8 @@ class Water extends Mesh {
                 osc.start(now);
                 osc.stop(now + 0.9);
 
-                // Ruido de detonación y onda de choque en boca
-                const noiseBuf = createNoiseBuffer(audioCtx, 0.45);
+                // Ruido de detonación y onda de choque en boca (reutilizando buffer en caché)
+                const noiseBuf = getCachedNoiseBuffer(audioCtx, 0.45);
                 const noiseSource = audioCtx.createBufferSource();
                 noiseSource.buffer = noiseBuf;
                 const filter = audioCtx.createBiquadFilter();
@@ -7140,7 +7158,7 @@ class Water extends Mesh {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             try {
                 const now = audioCtx.currentTime;
-                const noiseBuf = createNoiseBuffer(audioCtx, 1.2);
+                const noiseBuf = getCachedNoiseBuffer(audioCtx, 1.2);
                 const noiseSource = audioCtx.createBufferSource();
                 noiseSource.buffer = noiseBuf;
                 const filter = audioCtx.createBiquadFilter();
@@ -7188,7 +7206,7 @@ class Water extends Mesh {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             try {
                 const now = audioCtx.currentTime;
-                const noiseBuf = createNoiseBuffer(audioCtx, 3.5);
+                const noiseBuf = getCachedNoiseBuffer(audioCtx, 3.5);
                 const noiseSource = audioCtx.createBufferSource();
                 noiseSource.buffer = noiseBuf;
                 const filter = audioCtx.createBiquadFilter();
@@ -7514,13 +7532,35 @@ class Water extends Mesh {
             }
         }
 
-        // 4. Sistema de Artillería Naval (Cañón 76mm, Balística y Retroceso)
+        // 4. Sistema de Artillería Naval (Cañón 76mm, Balística y Retroceso con Zero-Lag)
         const activeProjectiles = [];
         const activeExplosions = [];
         let cannonRecoilTimer = 0.0;
+        let lastCannonFireTime = 0.0;
+        let lastFlareLaunchTime = 0.0;
+        let flashCombatTimer = 0.0;
+
+        // Geometrías y Materiales Compartidos (Cero Allocations en Runtime)
+        const pSharedGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.9, 8);
+        pSharedGeo.rotateX(Math.PI / 2);
+        const pSharedMat = new THREE.MeshBasicMaterial({ color: 0xffedd5 });
+
+        const expSplashGeo = new THREE.SphereGeometry(2.5, 10, 10);
+        const expFireGeo = new THREE.SphereGeometry(4.0, 10, 10);
+        const expSplashMat = new THREE.MeshBasicMaterial({ color: 0xbae6fd, transparent: true, opacity: 0.9 });
+        const expFireMat = new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.9 });
+
+        const flareSharedGeo = new THREE.SphereGeometry(0.55, 12, 12);
+        const flareSharedMat = new THREE.MeshBasicMaterial({ color: 0xffedd5 });
+        const chuteSharedGeo = new THREE.ConeGeometry(1.6, 1.2, 12, 1, true);
+        const chuteSharedMat = new THREE.MeshStandardMaterial({ color: 0xf97316, side: THREE.DoubleSide });
 
         function fireNavalCannon() {
             if (!ship) return;
+            const nowTime = performance.now();
+            if (nowTime - lastCannonFireTime < 380) return; // Anti-spam / Cooldown 380ms
+            lastCannonFireTime = nowTime;
+
             const isKorsar = (currentShipType === 'korsar');
             const usvX = currentState.x || 0;
             const usvZ = currentState.y || 0;
@@ -7541,20 +7581,12 @@ class Water extends Mesh {
             const vz = v0 * Math.cos(elev) * Math.cos(heading);
             const vy = v0 * Math.sin(elev);
 
-            const pGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.9, 8);
-            pGeo.rotateX(Math.PI / 2);
-            const pMat = new THREE.MeshBasicMaterial({ color: 0xffedd5 });
-            const pMesh = new THREE.Mesh(pGeo, pMat);
+            const pMesh = new THREE.Mesh(pSharedGeo, pSharedMat);
             pMesh.position.set(mX, mY, mZ);
             scene.add(pMesh);
 
-            const pLight = new THREE.PointLight(0xf97316, 2.5, 45, 1.5);
-            pLight.position.set(mX, mY, mZ);
-            scene.add(pLight);
-
             activeProjectiles.push({
                 mesh: pMesh,
-                light: pLight,
                 x: mX, y: mY, z: mZ,
                 vx: vx, vy: vy, vz: vz,
                 life: 0.0,
@@ -7563,13 +7595,13 @@ class Water extends Mesh {
 
             playNavalCannonSound();
 
-            const flashLight = new THREE.PointLight(0xfef08a, 6.0, 35, 1.2);
-            flashLight.position.set(mX, mY, mZ);
-            scene.add(flashLight);
-            setTimeout(() => {
-                scene.remove(flashLight);
-                flashLight.dispose();
-            }, 65);
+            // Destello en boca con la luz permanente pre-asignada (Zero recompilaciones shader)
+            if (typeof tacticalCombatLight !== 'undefined') {
+                tacticalCombatLight.position.set(mX, mY, mZ);
+                tacticalCombatLight.color.setHex(0xfef08a);
+                tacticalCombatLight.intensity = 5.5;
+                flashCombatTimer = 0.07;
+            }
         }
         window.fireNavalCannon = fireNavalCannon;
 
@@ -7578,27 +7610,29 @@ class Water extends Mesh {
             const expGroup = new THREE.Group();
             expGroup.position.set(x, y, z);
 
-            const expGeo = new THREE.SphereGeometry(isWaterSplash ? 2.5 : 4.2, 12, 12);
-            const expMat = new THREE.MeshBasicMaterial({
-                color: isWaterSplash ? 0xbae6fd : 0xf97316,
-                transparent: true,
-                opacity: 0.9
-            });
-            const expMesh = new THREE.Mesh(expGeo, expMat);
+            const expMesh = new THREE.Mesh(
+                isWaterSplash ? expSplashGeo : expFireGeo,
+                isWaterSplash ? expSplashMat.clone() : expFireMat.clone()
+            );
             expGroup.add(expMesh);
-
-            const expLight = new THREE.PointLight(isWaterSplash ? 0x38bdf8 : 0xfacc15, 4.0, 90, 1.2);
-            expGroup.add(expLight);
 
             scene.add(expGroup);
             activeExplosions.push({
                 group: expGroup,
                 mesh: expMesh,
-                light: expLight,
+                x: x, y: y, z: z,
+                isWater: isWaterSplash,
                 life: 0.0,
                 maxLife: isWaterSplash ? 0.6 : 0.85,
                 scaleSpeed: isWaterSplash ? 6.0 : 9.5
             });
+
+            if (typeof tacticalCombatLight !== 'undefined') {
+                tacticalCombatLight.position.set(x, y, z);
+                tacticalCombatLight.color.setHex(isWaterSplash ? 0x38bdf8 : 0xfacc15);
+                tacticalCombatLight.intensity = 4.0;
+                flashCombatTimer = isWaterSplash ? 0.15 : 0.35;
+            }
         }
 
         function updateProjectiles(dt) {
@@ -7606,8 +7640,19 @@ class Water extends Mesh {
                 cannonRecoilTimer -= dt;
                 if (ship && ship.userData && ship.userData.procKorsar && ship.userData.procKorsar.userData.barrel) {
                     const b = ship.userData.procKorsar.userData.barrel;
-                    const recoilOffset = (cannonRecoilTimer / 0.28) * 0.45;
-                    b.position.z = 14.8 - recoilOffset;
+                    if (cannonRecoilTimer <= 0) {
+                        b.position.z = 14.8;
+                    } else {
+                        const recoilOffset = (cannonRecoilTimer / 0.28) * 0.45;
+                        b.position.z = 14.8 - recoilOffset;
+                    }
+                }
+            }
+
+            if (flashCombatTimer > 0) {
+                flashCombatTimer -= dt;
+                if (flashCombatTimer <= 0 && activeExplosions.length === 0 && typeof tacticalCombatLight !== 'undefined') {
+                    tacticalCombatLight.intensity = 0.0;
                 }
             }
 
@@ -7620,7 +7665,6 @@ class Water extends Mesh {
                 p.z += p.vz * dt;
 
                 p.mesh.position.set(p.x, p.y, p.z);
-                p.light.position.set(p.x, p.y, p.z);
                 p.mesh.lookAt(p.x + p.vx, p.y + p.vy, p.z + p.vz);
 
                 const oceanY = (typeof waveElevation === 'function') ? waveElevation(p.x, p.z, simTime) : 0;
@@ -7686,10 +7730,6 @@ class Water extends Mesh {
 
                 if (collided || p.life >= p.maxLife) {
                     scene.remove(p.mesh);
-                    scene.remove(p.light);
-                    p.mesh.geometry.dispose();
-                    p.mesh.material.dispose();
-                    p.light.dispose();
                     activeProjectiles.splice(i, 1);
                 }
             }
@@ -7701,23 +7741,32 @@ class Water extends Mesh {
                 const sc = 1.0 + frac * exp.scaleSpeed;
                 exp.group.scale.set(sc, sc, sc);
                 exp.mesh.material.opacity = Math.max(0, 0.9 * (1.0 - frac));
-                exp.light.intensity = Math.max(0, 4.0 * (1.0 - frac));
+
+                if (flashCombatTimer <= 0 && i === 0 && typeof tacticalCombatLight !== 'undefined') {
+                    tacticalCombatLight.position.set(exp.x, exp.y, exp.z);
+                    tacticalCombatLight.intensity = Math.max(0, 3.5 * (1.0 - frac));
+                }
 
                 if (exp.life >= exp.maxLife) {
                     scene.remove(exp.group);
-                    exp.mesh.geometry.dispose();
                     exp.mesh.material.dispose();
-                    exp.light.dispose();
                     activeExplosions.splice(i, 1);
+                    if (activeExplosions.length === 0 && flashCombatTimer <= 0 && typeof tacticalCombatLight !== 'undefined') {
+                        tacticalCombatLight.intensity = 0.0;
+                    }
                 }
             }
         }
 
-        // 5. Sistema de Bengalas Iluminantes SAR (Búsqueda y Rescate)
+        // 5. Sistema de Bengalas Iluminantes SAR (Búsqueda y Rescate con Zero-Lag)
         const activeFlares = [];
 
         function launchSarFlare() {
             if (!ship) return;
+            const nowTime = performance.now();
+            if (nowTime - lastFlareLaunchTime < 1400) return; // Cooldown 1.4s
+            lastFlareLaunchTime = nowTime;
+
             const usvX = currentState.x || 0;
             const usvZ = currentState.y || 0;
             const shipY = ship.position.y || 0;
@@ -7725,21 +7774,13 @@ class Water extends Mesh {
             const flareGroup = new THREE.Group();
             flareGroup.position.set(usvX, shipY + 2.0, usvZ);
 
-            const fMesh = new THREE.Mesh(
-                new THREE.SphereGeometry(0.55, 12, 12),
-                new THREE.MeshBasicMaterial({ color: 0xffedd5 })
-            );
+            const fMesh = new THREE.Mesh(flareSharedGeo, flareSharedMat);
             flareGroup.add(fMesh);
 
-            const chGD = new THREE.ConeGeometry(1.6, 1.2, 12, 1, true);
-            const chMat = new THREE.MeshStandardMaterial({ color: 0xf97316, side: THREE.DoubleSide });
-            const chuteMesh = new THREE.Mesh(chGD, chMat);
+            const chuteMesh = new THREE.Mesh(chuteSharedGeo, chuteSharedMat);
             chuteMesh.position.set(0, 1.6, 0);
             chuteMesh.visible = false;
             flareGroup.add(chuteMesh);
-
-            const fLight = new THREE.PointLight(0xfbbf24, 2.8, 950, 1.4);
-            flareGroup.add(fLight);
 
             scene.add(flareGroup);
 
@@ -7747,7 +7788,6 @@ class Water extends Mesh {
                 group: flareGroup,
                 mesh: fMesh,
                 chute: chuteMesh,
-                light: fLight,
                 x: usvX, y: shipY + 2.0, z: usvZ,
                 vx: (Math.random() - 0.5) * 5.0,
                 vy: 46.0,
@@ -7758,6 +7798,11 @@ class Water extends Mesh {
             });
 
             playFlareLaunchSound();
+
+            if (typeof tacticalFlareLight !== 'undefined') {
+                tacticalFlareLight.position.set(usvX, shipY + 2.0, usvZ);
+                tacticalFlareLight.intensity = 2.8;
+            }
         }
         window.launchSarFlare = launchSarFlare;
 
@@ -7785,17 +7830,19 @@ class Water extends Mesh {
                 }
 
                 fl.group.position.set(fl.x, fl.y, fl.z);
-                fl.light.intensity = 2.4 + Math.sin(simTime * 18.0) * 0.45;
+
+                if (i === 0 && typeof tacticalFlareLight !== 'undefined') {
+                    tacticalFlareLight.position.set(fl.x, fl.y, fl.z);
+                    tacticalFlareLight.intensity = 2.4 + Math.sin(simTime * 18.0) * 0.45;
+                }
 
                 const oceanY = (typeof waveElevation === 'function') ? waveElevation(fl.x, fl.z, simTime) : 0;
                 if (fl.y <= oceanY || fl.life >= fl.maxLife) {
                     scene.remove(fl.group);
-                    fl.mesh.geometry.dispose();
-                    fl.mesh.material.dispose();
-                    fl.chute.geometry.dispose();
-                    fl.chute.material.dispose();
-                    fl.light.dispose();
                     activeFlares.splice(i, 1);
+                    if (activeFlares.length === 0 && typeof tacticalFlareLight !== 'undefined') {
+                        tacticalFlareLight.intensity = 0.0;
+                    }
                 }
             }
         }
@@ -7917,9 +7964,9 @@ class Water extends Mesh {
         }
 
         const btnFire = document.getElementById('btnNavFire');
-        if (btnFire) btnFire.addEventListener('click', fireNavalCannon);
+        if (btnFire) btnFire.addEventListener('click', () => { fireNavalCannon(); btnFire.blur(); });
         const btnFlare = document.getElementById('btnNavFlare');
-        if (btnFlare) btnFlare.addEventListener('click', launchSarFlare);
+        if (btnFlare) btnFlare.addEventListener('click', () => { launchSarFlare(); btnFlare.blur(); });
         const btnWeather = document.getElementById('btnNavWeather');
         if (btnWeather) btnWeather.addEventListener('click', toggleWeatherSystem);
         const btnAutoWp = document.getElementById('btnAutoWp');
