@@ -225,8 +225,11 @@
             </button>
         </nav>
 
-        <!-- Derecha: Acciones Rápidas (QR Celular, Reset e Instalar) -->
+        <!-- Derecha: Acciones Rápidas (Pausar/Play, QR Celular, Reset e Instalar) -->
         <div class="flex items-center gap-1.5">
+            <button id="btnPausePlay" class="bg-amber-950/80 hover:bg-amber-900 text-amber-300 px-2 sm:px-2.5 py-1 rounded-lg border border-amber-600/70 text-[10px] font-bold transition flex items-center gap-1 shadow cursor-pointer select-none" title="Pausar / Reanudar Simulación (Tecla P)">
+                <span id="pausePlayIcon">⏸️</span> <span id="pausePlayText">Pausar</span>
+            </button>
             <button id="qrModalBtn" class="bg-indigo-950 hover:bg-indigo-900 text-indigo-300 px-2 py-1 rounded-lg border border-indigo-700/70 text-[10px] font-bold transition flex items-center gap-1 shadow cursor-pointer" title="Ver Código QR para Celular">
                 📱 QR Móvil
             </button>
@@ -270,6 +273,22 @@
                 <canvas id="canvas3d" class="w-full h-full block cursor-grab active:cursor-grabbing touch-none" style="width: 100%; height: 100%; min-height: 220px;"></canvas>
                 <!-- Viñeteado Cinemático de Lente Naval -->
                 <div class="absolute inset-0 pointer-events-none z-10 shadow-[inset_0_0_90px_rgba(3,10,24,0.55)]"></div>
+
+                <!-- Overlay Banner de Pausa Táctica -->
+                <div id="pausedOverlayBanner" class="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-auto hidden transition-all duration-300">
+                    <div class="bg-slate-950/92 backdrop-blur-md border border-amber-500/80 rounded-2xl px-3.5 py-1.5 shadow-2xl shadow-amber-950/60 flex items-center gap-2.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                        <div class="flex flex-col">
+                            <span class="text-amber-300 font-black tracking-wider text-[11px] uppercase flex items-center gap-1">
+                                <span>⏸️ SIMULACIÓN PAUSADA</span>
+                            </span>
+                            <span class="text-[8.5px] text-slate-400 font-mono">Física detenida · Cámara libre 360°</span>
+                        </div>
+                        <button id="bannerResumeBtn" class="ml-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-xl text-[10px] font-black transition shadow active:scale-95 cursor-pointer flex items-center gap-1">
+                            ▶️ PLAY
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Overlay de Visión Táctica (NVG P43 / FLIR Infrarrojo White-Hot) -->
                 <div id="tacticalVisionOverlay" class="absolute inset-0 pointer-events-none z-10 hidden flex flex-col justify-between p-3 select-none">
@@ -383,6 +402,10 @@
                             🚀 APN
                         </button>
                         <div class="flex items-center gap-1 bg-slate-950/85 backdrop-blur-md p-1.5 rounded-2xl border border-slate-800 shadow-2xl">
+                            <button id="btnTouchPause" class="w-11 h-11 rounded-xl bg-slate-900 active:bg-amber-700 text-amber-300 active:text-white font-black text-xs flex flex-col items-center justify-center border border-slate-800 active:scale-95 transition select-none touch-manipulation" title="Pausar / Reanudar">
+                                <span id="btnTouchPauseIcon">⏸️</span>
+                                <span class="text-[7px] text-slate-400 font-bold" id="btnTouchPauseLabel">PAUSA</span>
+                            </button>
                             <button id="btnTouchStop" class="w-11 h-11 rounded-xl bg-slate-900 active:bg-rose-700 text-rose-300 active:text-white font-bold text-[10px] flex items-center justify-center border border-slate-800 active:scale-95 transition select-none touch-manipulation">
                                 STOP
                             </button>
@@ -4583,7 +4606,12 @@ class Water extends Mesh {
 
                 ws.onmessage = (event) => {
                     try {
-                        currentState = JSON.parse(event.data);
+                        const parsed = JSON.parse(event.data);
+                        if (isSimPaused) {
+                            // En modo pausa, mantener congelada la simulación y telemetría histórica
+                            return;
+                        }
+                        currentState = parsed;
                         updateHUD(currentState);
 
                         // Agregar punto a la telemetría histórica
@@ -5587,7 +5615,73 @@ class Water extends Mesh {
             }
         });
 
+        /* -------------------------------------------------------------------------
+           CONTROL DE PAUSA / REANUDACIÓN DE LA SIMULACIÓN
+           ------------------------------------------------------------------------- */
+        let isSimPaused = false;
+        let pausedSnapshot = null;
+
+        function toggleSimulationPause(forceState) {
+            if (typeof forceState === 'boolean') {
+                isSimPaused = forceState;
+            } else {
+                isSimPaused = !isSimPaused;
+            }
+
+            const btn = document.getElementById('btnPausePlay');
+            const icon = document.getElementById('pausePlayIcon');
+            const txt = document.getElementById('pausePlayText');
+            const banner = document.getElementById('pausedOverlayBanner');
+            const touchBtn = document.getElementById('btnTouchPause');
+            const touchIcon = document.getElementById('btnTouchPauseIcon');
+            const touchLbl = document.getElementById('btnTouchPauseLabel');
+
+            if (isSimPaused) {
+                // Estado: PAUSADO -> Botón verde con opción "Play" para reanudar
+                if (btn) {
+                    btn.className = "bg-emerald-600 hover:bg-emerald-500 text-white px-2 sm:px-2.5 py-1 rounded-lg border border-emerald-400 text-[10px] font-black transition flex items-center gap-1 shadow-lg shadow-emerald-950/60 cursor-pointer select-none animate-pulse";
+                }
+                if (icon) icon.innerText = "▶️";
+                if (txt) txt.innerText = "Play";
+                if (banner) banner.classList.remove('hidden');
+                if (touchIcon) touchIcon.innerText = "▶️";
+                if (touchLbl) touchLbl.innerText = "PLAY";
+                if (touchBtn) touchBtn.className = "w-11 h-11 rounded-xl bg-emerald-700 active:bg-emerald-600 text-white font-black text-xs flex flex-col items-center justify-center border border-emerald-400 active:scale-95 transition select-none touch-manipulation shadow-lg animate-pulse";
+
+                // Congelar snapshot del estado actual de todos los buques
+                pausedSnapshot = JSON.parse(JSON.stringify(currentState));
+
+                sendControls({ pause: true });
+            } else {
+                // Estado: EN MARCHA -> Botón ámbar para pausar
+                if (btn) {
+                    btn.className = "bg-amber-950/80 hover:bg-amber-900 text-amber-300 px-2 sm:px-2.5 py-1 rounded-lg border border-amber-600/70 text-[10px] font-bold transition flex items-center gap-1 shadow cursor-pointer select-none";
+                }
+                if (icon) icon.innerText = "⏸️";
+                if (txt) txt.innerText = "Pausar";
+                if (banner) banner.classList.add('hidden');
+                if (touchIcon) touchIcon.innerText = "⏸️";
+                if (touchLbl) touchLbl.innerText = "PAUSA";
+                if (touchBtn) touchBtn.className = "w-11 h-11 rounded-xl bg-slate-900 active:bg-amber-700 text-amber-300 active:text-white font-black text-xs flex flex-col items-center justify-center border border-slate-800 active:scale-95 transition select-none touch-manipulation";
+
+                pausedSnapshot = null;
+                if (typeof clock !== 'undefined' && clock) clock.getDelta();
+
+                sendControls({ pause: false });
+            }
+        }
+        window.toggleSimulationPause = toggleSimulationPause;
+
+        const btnPausePlay = document.getElementById('btnPausePlay');
+        if (btnPausePlay) btnPausePlay.addEventListener('click', () => toggleSimulationPause());
+
+        const bannerResumeBtn = document.getElementById('bannerResumeBtn');
+        if (bannerResumeBtn) bannerResumeBtn.addEventListener('click', () => toggleSimulationPause(false));
+
         document.getElementById('resetViewBtn').addEventListener('click', () => {
+            if (isSimPaused) {
+                toggleSimulationPause(false);
+            }
             sendControls({ reset: true });
             document.getElementById('missionDebriefModal').classList.add('hidden');
             cameraInitialized = false;
@@ -5820,6 +5914,7 @@ class Water extends Mesh {
 
         window.addEventListener('keydown', (e) => {
             const k = (e.key || '').toLowerCase();
+            if (k === 'p') { toggleSimulationPause(); return; }
             if (k === '1') { selectMission(1); return; }
             if (k === '2') { selectMission(2); return; }
             if (k === '3') { selectMission(3); return; }
@@ -6002,7 +6097,35 @@ class Water extends Mesh {
                 return;
             }
 
-            const dt = Math.min(clock.getDelta(), 0.1);
+            const realDelta = clock.getDelta();
+            const dt = isSimPaused ? 0.0 : Math.min(realDelta, 0.1);
+
+            // Si está en pausa, asegurar que las coordenadas y física permanezcan exactamente congeladas
+            if (isSimPaused && pausedSnapshot) {
+                currentState.x = pausedSnapshot.x;
+                currentState.y = pausedSnapshot.y;
+                currentState.z = pausedSnapshot.z;
+                currentState.psi = pausedSnapshot.psi;
+                currentState.phi = pausedSnapshot.phi;
+                currentState.theta = pausedSnapshot.theta;
+                currentState.u = pausedSnapshot.u;
+                currentState.t = pausedSnapshot.t;
+                if (pausedSnapshot.target && currentState.target) {
+                    currentState.target.x = pausedSnapshot.target.x;
+                    currentState.target.y = pausedSnapshot.target.y;
+                    currentState.target.psi = pausedSnapshot.target.psi;
+                }
+                if (pausedSnapshot.merchant && currentState.merchant) {
+                    currentState.merchant.x = pausedSnapshot.merchant.x;
+                    currentState.merchant.y = pausedSnapshot.merchant.y;
+                    currentState.merchant.psi = pausedSnapshot.merchant.psi;
+                }
+                if (pausedSnapshot.swarm && pausedSnapshot.swarm.wingman && currentState.swarm && currentState.swarm.wingman) {
+                    currentState.swarm.wingman.x = pausedSnapshot.swarm.wingman.x;
+                    currentState.swarm.wingman.y = pausedSnapshot.swarm.wingman.y;
+                    currentState.swarm.wingman.psi = pausedSnapshot.swarm.wingman.psi;
+                }
+            }
 
             // Modo Autónomo / Fallback si el WebSocket no está conectado
             if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -6035,15 +6158,21 @@ class Water extends Mesh {
                 updateHUD(currentState);
             }
 
-            simTime = currentState.t || (simTime + dt);
+            if (!isSimPaused) {
+                simTime = currentState.t || (simTime + dt);
+            }
 
             const usvX = currentState.x || 0;
             const usvZ = currentState.y || 0;
             const usvSpeed = currentState.u || 0;
 
             if (isAudioPlaying && audioCtx) {
-                const thrustFrac = Math.max(0, Math.min(1, (currentState.thrust_actual || 2000) / 8500));
-                updateNavalAudio(thrustFrac, usvSpeed, simTime);
+                if (isSimPaused) {
+                    updateNavalAudio(0.0, 0.0, simTime);
+                } else {
+                    const thrustFrac = Math.max(0, Math.min(1, (currentState.thrust_actual || 2000) / 8500));
+                    updateNavalAudio(thrustFrac, usvSpeed, simTime);
+                }
             }
 
             // 1. Malla Oceánica y Astroscopia (Sol, Luna y Camino Especular en el Oleaje)
@@ -7018,6 +7147,8 @@ class Water extends Mesh {
             });
         }
 
+        const btnTPause = document.getElementById('btnTouchPause');
+        if (btnTPause) btnTPause.addEventListener('click', () => { unlockAudioOnTouch(); toggleSimulationPause(); });
         if (btnTStop) btnTStop.addEventListener('click', () => { unlockAudioOnTouch(); document.getElementById('btnThrStop').click(); });
         if (btnTCruise) btnTCruise.addEventListener('click', () => { unlockAudioOnTouch(); document.getElementById('btnThrCruise').click(); });
         if (btnTMax) btnTMax.addEventListener('click', () => { unlockAudioOnTouch(); document.getElementById('btnThrMax').click(); });
