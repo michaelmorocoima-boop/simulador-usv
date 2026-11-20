@@ -8431,15 +8431,23 @@ class Water extends Mesh {
                     }
                 }
 
-                if (tType === "DOCK") {
+                const isNonSolidArea = (tType === "DOCK" || tType === "MINEFIELD" || tType === "SWARM_HOSTILE" || tType === "CHANNEL_TRANSIT" || tType === "SEA_TRIALS");
+                if (isNonSolidArea) {
                     targetGroup.visible = false;
+                    patrolCombatGroup.visible = false;
+                    sarRaftGroup.visible = false;
+                    stalkerTargetGroup.visible = false;
+                    warshipGroup.visible = false;
+                    if (typeof superviseTargetGroup !== 'undefined') {
+                        superviseTargetGroup.visible = false;
+                    }
                 } else {
                     targetGroup.visible = true;
                     const isPatrol = (tType === "PATROL_COMBAT" || tType === "GO_FAST");
                     const isSar = (tType === "SAR_RAFT");
                     const isStalker = (tType === "INTRUDER_STALKER" || currentState.mission_id === 4);
                     const isSupervise = (tType === "SUPERVISE_CRAFT" || currentState.mission_id === 7);
-                    const isWarship = (tType === "WARSHIP" || (!isStalker && !isPatrol && !isSar && !isSupervise && tType !== "MINEFIELD" && tType !== "SWARM_HOSTILE" && tType !== "CHANNEL_TRANSIT" && tType !== "SEA_TRIALS"));
+                    const isWarship = (tType === "WARSHIP" || (!isStalker && !isPatrol && !isSar && !isSupervise));
 
                     patrolCombatGroup.visible = isPatrol;
                     sarRaftGroup.visible = isSar;
@@ -8848,7 +8856,8 @@ class Water extends Mesh {
                 }
 
                 // F) Blanco Táctico de Misión (Patrullero, Stalker, Destructor DDG-51, Balsa)
-                if (currentState.target && targetGroup && targetGroup.visible && currentState.target.target_type !== "DOCK") {
+                const physicalTargetTypes = ["PATROL_COMBAT", "GO_FAST", "WARSHIP", "INTRUDER_STALKER", "SUPERVISE_CRAFT", "SAR_RAFT"];
+                if (currentState.target && targetGroup && targetGroup.visible && physicalTargetTypes.includes(currentState.target.target_type)) {
                     const t = currentState.target;
                     const tType = t.target_type;
                     const isSar = (tType === "SAR_RAFT");
@@ -8905,6 +8914,7 @@ class Water extends Mesh {
                 // Evaluar colisiones físicas con todos los buques del escenario (Player vs Ships)
                 for (let i = 0; i < obstacles.length; i++) {
                     const obs = obstacles[i];
+                    if (obs.name && obs.name.includes("CAMPO DE MINAS")) continue;
                     const colRes = checkClientShipOBB(ship.position.x, ship.position.z, rOwn, obs.cx, obs.cz, obs.rotY, obs.halfL, obs.halfW);
                     if (colRes.collided) {
                         // CLAMPEAR DE INMEDIATO EN LA LÍNEA EXTERIOR DEL CASCO (IMPOSIBLE ATRAVESAR)
