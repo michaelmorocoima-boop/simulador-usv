@@ -1175,7 +1175,7 @@
                 code: "OP-08 // MINE CLEARANCE",
                 location: "ACCESO AL CANAL · CAMPO DE MINAS MCM",
                 weather: "MODO DIURNO · BRUMA MARÍTIMA · BEAUFORT 2",
-                description: "Detección y neutralización artillera de 4 minas marinas amarradas a distancia de seguridad (≥25 m).",
+                description: "Navegación de precisión MCM y desminado: aproxímese y pase en un rango menor a 2 metros (< 2.0 m) de cada una de las 4 minas para desactivarlas y despejar el canal.",
                 themeKey: "DAY",
                 shipType: "usv",
                 Hs: 0.9, Tp: 3.8, gamma: 2.2, dirDeg: 15.0
@@ -3157,6 +3157,38 @@ class Water extends Mesh {
             beacon.position.set(0, 0.95, 0);
             mGrp.add(beacon);
 
+            // Anillo visual de rango de neutralización (< 2.0 m)
+            const zoneRingGeo = new THREE.RingGeometry(1.85, 2.05, 32);
+            zoneRingGeo.rotateX(-Math.PI / 2);
+            const zoneRingMat = new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.65, side: THREE.DoubleSide });
+            const zoneRing = new THREE.Mesh(zoneRingGeo, zoneRingMat);
+            zoneRing.position.y = 0.1;
+            mGrp.add(zoneRing);
+            mGrp.userData.zoneRing = zoneRing;
+
+            // Rótulo flotante de proximidad
+            const mBadgeCanvas = document.createElement('canvas');
+            mBadgeCanvas.width = 192; mBadgeCanvas.height = 64;
+            const mbCtx = mBadgeCanvas.getContext('2d');
+            mbCtx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+            mbCtx.roundRect(2, 2, 188, 60, 8);
+            mbCtx.fill();
+            mbCtx.strokeStyle = '#ef4444';
+            mbCtx.lineWidth = 2;
+            mbCtx.stroke();
+            mbCtx.fillStyle = '#f87171';
+            mbCtx.font = 'bold 22px monospace';
+            mbCtx.textAlign = 'center';
+            mbCtx.fillText(`MINA #${c.id}`, 96, 28);
+            mbCtx.fillStyle = '#fef08a';
+            mbCtx.font = 'bold 16px monospace';
+            mbCtx.fillText('RANGO < 2m', 96, 50);
+            const mbTex = new THREE.CanvasTexture(mBadgeCanvas);
+            const mbSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: mbTex, transparent: true }));
+            mbSprite.position.set(0, 2.2, 0);
+            mbSprite.scale.set(4.5, 1.5, 1.0);
+            mGrp.add(mbSprite);
+
             minesFieldGroup.add(mGrp);
             activeMinesObjects.push(mGrp);
         });
@@ -4888,6 +4920,43 @@ class Water extends Mesh {
                 }
             }
 
+            // Minas Navales de Contacto (Misión 8) con anillo de 2m
+            if (currentState.mission_id === 8) {
+                const minesData = (currentState.mission_details && currentState.mission_details.mines_list) || [
+                    { id: 1, x: 280, y: 270, destroyed: false },
+                    { id: 2, x: 330, y: 320, destroyed: false },
+                    { id: 3, x: 380, y: 360, destroyed: false },
+                    { id: 4, x: 430, y: 410, destroyed: false }
+                ];
+                minesData.forEach(m => {
+                    const pm = toRadar(m.x, m.y);
+                    if (pm.x >= 0 && pm.x <= W && pm.y >= 0 && pm.y <= H) {
+                        if (m.destroyed) {
+                            radarCtx.fillStyle = '#22c55e';
+                            radarCtx.font = 'bold 9px monospace';
+                            radarCtx.fillText('✓', pm.x - 3, pm.y + 3);
+                        } else {
+                            radarCtx.fillStyle = '#ef4444';
+                            radarCtx.beginPath();
+                            radarCtx.arc(pm.x, pm.y, 3.5, 0, Math.PI * 2);
+                            radarCtx.fill();
+
+                            // Anillo de 2 metros en radar
+                            const r2m = Math.max(5, 2.0 * scale);
+                            radarCtx.strokeStyle = 'rgba(239, 68, 68, 0.7)';
+                            radarCtx.lineWidth = 1;
+                            radarCtx.beginPath();
+                            radarCtx.arc(pm.x, pm.y, r2m, 0, Math.PI * 2);
+                            radarCtx.stroke();
+
+                            radarCtx.fillStyle = '#fca5a5';
+                            radarCtx.font = 'bold 7px monospace';
+                            radarCtx.fillText(`M${m.id} (<2m)`, pm.x + 6, pm.y - 2);
+                        }
+                    }
+                });
+            }
+
             // Estela histórica
             if (trajectoryHistory.length > 1) {
                 radarCtx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
@@ -5833,6 +5902,58 @@ class Water extends Mesh {
                         </div>
                     `}
                 `;
+            } else if (s.mission_id === 8) {
+                const minesList = (s.mission_details && s.mission_details.mines_list) || [
+                    { id: 1, x: 280, y: 270, destroyed: false },
+                    { id: 2, x: 330, y: 320, destroyed: false },
+                    { id: 3, x: 380, y: 360, destroyed: false },
+                    { id: 4, x: 430, y: 410, destroyed: false }
+                ];
+                const destroyedCount = (s.mission_details && s.mission_details.mines_destroyed) || 0;
+                const totalMines = (s.mission_details && s.mission_details.mines_total) || 4;
+
+                let nearestDist = 999.0;
+                let nearestId = -1;
+                minesList.forEach(m => {
+                    if (!m.destroyed) {
+                        const d = Math.hypot(m.x - s.x, m.y - s.y);
+                        if (d < nearestDist) {
+                            nearestDist = d;
+                            nearestId = m.id;
+                        }
+                    }
+                });
+
+                dPanel.innerHTML = `
+                    <div class="font-bold text-red-400 border-b border-slate-800 pb-0.5 mb-1 flex justify-between items-center">
+                        <span>💣 GUERRA DE MINAS (MCM)</span>
+                        <span class="text-[8px] px-1.5 py-0.2 rounded font-mono font-bold ${destroyedCount === totalMines ? 'bg-emerald-950 text-emerald-300 border border-emerald-500' : 'bg-red-950 text-red-300 border border-red-600'}">
+                            ${destroyedCount}/${totalMines} DESACTIVADAS
+                        </span>
+                    </div>
+                    <div class="space-y-1 text-[8.5px]">
+                        <div class="flex justify-between items-center bg-slate-900/90 px-1.5 py-0.5 rounded border border-red-800">
+                            <span class="text-slate-300 font-bold">🎯 Rango de Neutralización:</span>
+                            <span class="font-bold text-amber-300 font-mono">&lt; 2.0 m</span>
+                        </div>
+                        <div class="grid grid-cols-4 gap-1 text-[7.5px] text-center font-mono font-bold">
+                            ${minesList.map(m => `
+                                <div class="p-1 rounded border ${m.destroyed ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300' : (m.id === nearestId ? 'bg-amber-950/90 border-amber-400 text-amber-200 animate-pulse' : 'bg-slate-900 border-slate-700 text-slate-400')}">
+                                    M${m.id}<br>${m.destroyed ? '✓ DESACT.' : `${Math.hypot(m.x - s.x, m.y - s.y).toFixed(1)}m`}
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="flex justify-between text-[8px]">
+                            <span class="text-slate-400">Mina más próxima:</span>
+                            <span class="font-mono font-bold ${nearestDist <= 2.0 ? 'text-emerald-400 animate-ping' : (nearestDist <= 10.0 ? 'text-amber-400' : 'text-slate-200')}">
+                                ${nearestId > 0 ? `Mina #${nearestId} a ${nearestDist.toFixed(1)} m` : 'CAMPO DESPEJADO'}
+                            </span>
+                        </div>
+                        <div class="mt-0.5 text-center text-red-300 font-bold bg-red-950/70 p-1 rounded border border-red-800 text-[8px] flex items-center justify-center gap-1">
+                            <span>⚡</span> <span>PASE A MENOS DE 2M DE CADA MINA PARA DESACTIVARLA</span>
+                        </div>
+                    </div>
+                `;
             } else {
                 const tName = (s.target && s.target.name) || "BLANCO";
                 const tDist = (s.target && s.target.distance) || 0;
@@ -6068,13 +6189,14 @@ class Water extends Mesh {
                 iconEl.innerText = "💣";
                 titleEl.innerText = "GUERRA DE MINAS Y DESMINADO (MCM)";
                 badgeEl.innerText = "CAMPO DE MINAS DESPEJADO";
-                badgeEl.className = "text-[8.5px] px-2 py-0.5 rounded-full font-bold bg-red-950 text-red-300 border border-red-600";
+                badgeEl.className = "text-[8.5px] px-2 py-0.5 rounded-full font-bold bg-emerald-950 text-emerald-300 border border-emerald-600";
                 contentEl.innerHTML = `
                     <div class="flex justify-between"><span class="text-slate-400">Sector MCM:</span> <span class="text-slate-100 font-bold">${stats.target_name}</span></div>
                     <div class="flex justify-between"><span class="text-slate-400">Tiempo de Barrido:</span> <span class="text-sky-400">${stats.elapsed_time} s</span></div>
-                    <div class="flex justify-between"><span class="text-slate-400">Minas Neutralizadas:</span> <span class="text-red-400 font-bold">${stats.mines_cleared || '4/4 MINAS'}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">Minas Desactivadas:</span> <span class="text-emerald-400 font-bold">${stats.mines_cleared || '4/4 MINAS'}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-400">Rango de Precisión:</span> <span class="text-amber-300 font-bold">&lt; 2.0 m (Conforme)</span></div>
                     <div class="flex justify-between"><span class="text-slate-400">Integridad de Casco:</span> <span class="text-emerald-400 font-bold">${stats.hull_integrity || '100% INTACTO'}</span></div>
-                    <div class="mt-1 text-center text-red-400 font-bold bg-red-950/60 p-1 rounded border border-red-800">${stats.status}</div>
+                    <div class="mt-1 text-center text-emerald-400 font-bold bg-emerald-950/60 p-1 rounded border border-emerald-800">${stats.status}</div>
                 `;
             } else if (missionId === 9) {
                 iconEl.innerText = "🐝";
@@ -8339,22 +8461,56 @@ class Water extends Mesh {
             }
 
             // 4A. Actualización de Objetivos Especiales de Misiones 6, 8, 9, 10
-            // M8: Minas Navales de Contacto
+            // M8: Minas Navales de Contacto con desactivación a rango < 2.0 m
             if (typeof activeMinesObjects !== 'undefined' && activeMinesObjects.length) {
+                const sX = ship ? ship.position.x : (currentState.x || 0);
+                const sZ = ship ? ship.position.z : (currentState.y || 0);
+                const sPsi = ship ? ship.rotation.y : (currentState.psi || 0);
+
                 activeMinesObjects.forEach(mObj => {
-                    if (mObj.visible) {
+                    if (mObj.visible && !mObj.userData.destroyed) {
                         const mEta = waveElevation(mObj.position.x, mObj.position.z, simTime);
                         mObj.position.y = mEta - 0.15;
                         mObj.rotation.y = simTime * 0.4;
                         mObj.rotation.z = Math.sin(simTime * 1.5 + mObj.userData.id) * 0.08;
+
+                        if (mObj.userData.zoneRing) {
+                            mObj.userData.zoneRing.rotation.z += dt * 0.8;
+                            const puls = 0.5 + Math.sin(simTime * 3.5 + mObj.userData.id) * 0.25;
+                            mObj.userData.zoneRing.material.opacity = puls;
+                        }
+
+                        // Verificación de paso a menos de 2.0 m
+                        const dx = mObj.position.x - sX;
+                        const dz = mObj.position.z - sZ;
+                        const dCenter = Math.hypot(dx, dz);
+
+                        const relX = dx * Math.cos(sPsi) + dz * Math.sin(sPsi);
+                        const relZ = -dx * Math.sin(sPsi) + dz * Math.cos(sPsi);
+                        const cDx = Math.max(0, Math.abs(relX) - 4.5);
+                        const cDz = Math.max(0, Math.abs(relZ) - 1.25);
+                        const dHull = Math.hypot(cDx, cDz);
+
+                        if (dHull <= 2.0 || dCenter <= 2.5) {
+                            mObj.userData.destroyed = true;
+                            mObj.visible = false;
+                            spawnNavalExplosion(mObj.position.x, mObj.position.y + 0.8, mObj.position.z, false);
+                            playHullSlamSound(0.85);
+                            announceTacticalVoice(`¡Mina ${mObj.userData.id} desactivada a menos de dos metros!`);
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({ neutralize_mine: mObj.userData.id }));
+                            }
+                        }
                     }
                 });
+
                 if (currentState.mission_details && currentState.mission_details.mines_list) {
                     currentState.mission_details.mines_list.forEach(mNet => {
                         const mObj = activeMinesObjects.find(o => o.userData.id === mNet.id);
-                        if (mObj && mNet.destroyed) {
+                        if (mObj && mNet.destroyed && mObj.visible) {
                             mObj.visible = false;
                             mObj.userData.destroyed = true;
+                            spawnNavalExplosion(mObj.position.x, mObj.position.y + 0.8, mObj.position.z, false);
                         }
                     });
                 }
