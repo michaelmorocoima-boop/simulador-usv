@@ -7002,6 +7002,11 @@ class Water extends Mesh {
                 // Congelar snapshot del estado actual de todos los buques
                 pausedSnapshot = JSON.parse(JSON.stringify(currentState));
 
+                // Suspender WebAudio para enfriar la CPU inmediatamente (reduce coreaudiod a 0%)
+                if (audioCtx && audioCtx.state === 'running') {
+                    audioCtx.suspend().catch(() => {});
+                }
+
                 sendControls({ pause: true });
             } else {
                 // Estado: EN MARCHA -> Botón ámbar para pausar
@@ -7014,6 +7019,11 @@ class Water extends Mesh {
                 if (touchIcon) touchIcon.innerText = "⏸️";
                 if (touchLbl) touchLbl.innerText = "PAUSA";
                 if (touchBtn) touchBtn.className = "w-11 h-11 rounded-xl bg-slate-900 active:bg-amber-700 text-amber-300 active:text-white font-black text-xs flex flex-col items-center justify-center border border-slate-800 active:scale-95 transition select-none touch-manipulation";
+
+                // Reanudar audio si estaba activo
+                if (audioCtx && audioCtx.state === 'suspended' && isAudioPlaying) {
+                    audioCtx.resume().catch(() => {});
+                }
 
                 pausedSnapshot = null;
                 if (typeof clock !== 'undefined' && clock) clock.getDelta();
@@ -8249,8 +8259,16 @@ class Water extends Mesh {
         simTime = 0.0;
         const clock = new THREE.Clock();
         let isTabVisible = !document.hidden;
+        let pauseFrameSkip = 0;
         document.addEventListener('visibilitychange', () => {
             isTabVisible = !document.hidden;
+            if (audioCtx) {
+                if (document.hidden && audioCtx.state === 'running') {
+                    audioCtx.suspend().catch(() => {});
+                } else if (!document.hidden && audioCtx.state === 'suspended' && isAudioPlaying && !isSimPaused) {
+                    audioCtx.resume().catch(() => {});
+                }
+            }
         });
 
         // Vectores auxiliares preasignados para eliminar Garbage Collection en render loop (0 lag)
@@ -8379,6 +8397,14 @@ class Water extends Mesh {
             // Si la pestaña no está visible (en segundo plano o minimizada), pausar renderizado para enfriar el CPU y GPU
             if (!isTabVisible) {
                 return;
+            }
+
+            // Modo Eco / Enfriamiento en pausa: reduce el renderizado a ~10 FPS para enfriar drásticamente la GPU y CPU
+            if (isSimPaused) {
+                pauseFrameSkip = (pauseFrameSkip + 1) % 6;
+                if (pauseFrameSkip !== 0) {
+                    return;
+                }
             }
 
             const realDelta = clock.getDelta();
