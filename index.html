@@ -614,8 +614,10 @@
                     <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
                     <span class="text-cyan-300">PUENTE C2 // MANDOS</span>
                 </div>
-                <button id="minimizeSidebarBtn" class="text-slate-400 hover:text-cyan-300 px-2 py-0.5 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-700/60 text-[9.5px] font-bold transition flex items-center gap-1 cursor-pointer select-none" title="Guardar / Ocultar Consola de Mandos (Tecla Tab)">
-                    <span>✕</span> <span class="text-[8.5px]">Guardar</span>
+                <button id="minimizeSidebarBtn" class="text-slate-300 hover:text-white px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-700/70 text-[9.5px] font-bold transition flex items-center gap-1.5 cursor-pointer select-none active:scale-95 shadow" title="Minimizar / Ocultar Consola de Mandos (Tecla Tab)">
+                    <span class="font-mono text-xs font-black">_</span>
+                    <span>Minimizar</span>
+                    <span class="text-[10px]">▶</span>
                 </button>
             </div>
             
@@ -808,6 +810,13 @@
             </div>
         </aside>
     </main>
+
+    <!-- Pestaña Flotante Lateral para Restaurar la Consola de Mandos cuando está Minimizada -->
+    <button id="expandSidebarTab" class="hidden fixed right-0 top-1/2 -translate-y-1/2 z-35 bg-slate-950/95 hover:bg-slate-900 border-l-2 border-y border-cyan-400 text-cyan-300 shadow-2xl rounded-l-xl px-1.5 py-3 flex flex-col items-center gap-2 cursor-pointer transition select-none group backdrop-blur-md active:scale-95" title="Restaurar Consola de Mandos C2 (Tecla Tab)">
+        <span class="text-xs group-hover:-translate-x-0.5 transition-transform text-cyan-400 font-bold">◀</span>
+        <span class="text-[9px] font-black tracking-widest [writing-mode:vertical-lr] rotate-180 text-cyan-400 group-hover:text-cyan-200">MANDOS</span>
+        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+    </button>
 
     <!-- Modal Táctico Post-Misión -->
     <div id="missionDebriefModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -6465,18 +6474,28 @@ class Water extends Mesh {
 
         function toggleSidebar(show) {
             const sidebar = document.getElementById('controlSidebar');
+            const expandTab = document.getElementById('expandSidebarTab');
             const menuLabel = document.getElementById('sidebarMenuStatusLabel');
             if (!sidebar) return;
-            const willShow = (show !== undefined) ? !!show : sidebar.classList.contains('hidden');
+            const isCurrentlyHidden = (sidebar.style.display === 'none' || sidebar.classList.contains('hidden'));
+            const willShow = (show !== undefined) ? !!show : isCurrentlyHidden;
             panelsState.sidebar = willShow;
 
             if (willShow) {
+                sidebar.style.display = 'flex';
                 sidebar.classList.remove('hidden');
-                sidebar.classList.add('flex');
+                if (expandTab) {
+                    expandTab.classList.add('hidden');
+                    expandTab.style.display = 'none';
+                }
                 if (menuLabel) menuLabel.innerText = "ON";
             } else {
+                sidebar.style.display = 'none';
                 sidebar.classList.add('hidden');
-                sidebar.classList.remove('flex');
+                if (expandTab) {
+                    expandTab.classList.remove('hidden');
+                    expandTab.style.display = 'flex';
+                }
                 if (menuLabel) menuLabel.innerText = "OFF";
             }
             syncDockButton('dockBtnSidebar', willShow);
@@ -6486,14 +6505,17 @@ class Water extends Mesh {
 
         function toggleRadar(show) {
             if (!radarContainer) return;
-            const willShow = (show !== undefined) ? !!show : radarContainer.classList.contains('hidden');
+            const isHidden = (radarContainer.style.display === 'none' || radarContainer.classList.contains('hidden'));
+            const willShow = (show !== undefined) ? !!show : isHidden;
             panelsState.radar = willShow;
 
             if (willShow) {
+                radarContainer.style.display = 'flex';
                 radarContainer.classList.remove('hidden');
                 const label = document.getElementById('radarStatusLabel');
                 if (label) label.innerText = "ON";
             } else {
+                radarContainer.style.display = 'none';
                 radarContainer.classList.add('hidden');
                 const label = document.getElementById('radarStatusLabel');
                 if (label) label.innerText = "OFF";
@@ -6504,14 +6526,17 @@ class Water extends Mesh {
 
         function toggleChart(show) {
             if (!chartContainer) return;
-            const willShow = (show !== undefined) ? !!show : chartContainer.classList.contains('hidden');
+            const isHidden = (chartContainer.style.display === 'none' || chartContainer.classList.contains('hidden'));
+            const willShow = (show !== undefined) ? !!show : isHidden;
             panelsState.chart = willShow;
 
             if (willShow) {
+                chartContainer.style.display = 'flex';
                 chartContainer.classList.remove('hidden');
                 const label = document.getElementById('chartStatusLabel');
                 if (label) label.innerText = "ON";
             } else {
+                chartContainer.style.display = 'none';
                 chartContainer.classList.add('hidden');
                 const label = document.getElementById('chartStatusLabel');
                 if (label) label.innerText = "OFF";
@@ -6524,14 +6549,17 @@ class Water extends Mesh {
         function toggleCamHud(show) {
             const box = document.getElementById('hudCamInfoBox');
             if (!box) return;
-            const willShow = (show !== undefined) ? !!show : box.classList.contains('hidden');
+            const isHidden = (box.style.display === 'none' || box.classList.contains('hidden'));
+            const willShow = (show !== undefined) ? !!show : isHidden;
             panelsState.camHud = willShow;
 
             if (willShow) {
+                box.style.display = 'block';
                 box.classList.remove('hidden');
                 const label = document.getElementById('camHudStatusLabel');
                 if (label) label.innerText = "ON";
             } else {
+                box.style.display = 'none';
                 box.classList.add('hidden');
                 const label = document.getElementById('camHudStatusLabel');
                 if (label) label.innerText = "OFF";
@@ -6543,14 +6571,17 @@ class Water extends Mesh {
         function toggleTrafficBanner(show) {
             const banner = document.getElementById('tacticalTrafficBanner');
             if (!banner) return;
-            const willShow = (show !== undefined) ? !!show : banner.classList.contains('hidden');
+            const isHidden = (banner.style.display === 'none' || banner.classList.contains('hidden'));
+            const willShow = (show !== undefined) ? !!show : isHidden;
             panelsState.traffic = willShow;
 
             if (willShow) {
+                banner.style.display = 'flex';
                 banner.classList.remove('hidden');
                 const label = document.getElementById('trafficBannerStatusLabel');
                 if (label) label.innerText = "ON";
             } else {
+                banner.style.display = 'none';
                 banner.classList.add('hidden');
                 const label = document.getElementById('trafficBannerStatusLabel');
                 if (label) label.innerText = "OFF";
@@ -6631,6 +6662,10 @@ class Water extends Mesh {
         // Botón Minimizar de la Consola de Mandos
         const minSidebarBtn = document.getElementById('minimizeSidebarBtn');
         if (minSidebarBtn) minSidebarBtn.addEventListener('click', () => toggleSidebar(false));
+
+        // Pestaña lateral flotante para restaurar la Consola de Mandos
+        const expSidebarTab = document.getElementById('expandSidebarTab');
+        if (expSidebarTab) expSidebarTab.addEventListener('click', () => toggleSidebar(true));
 
         // Botón Sidebar en Menú Vistas
         const menuSidebarBtn = document.getElementById('toggleSidebarMenuBtn');
