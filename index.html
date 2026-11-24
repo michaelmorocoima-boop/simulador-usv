@@ -266,8 +266,8 @@
                 <span>🐝 Enjambre:</span> <span id="swarmStatusLabel" class="text-slate-400">OFF</span>
             </button>
 
-            <!-- Selector de Modo de Mar (Estándar / La Guaira HD) -->
-            <button id="toggleSeaModeBtn" class="bg-slate-900 hover:bg-teal-950 text-teal-300 px-2 sm:px-2.5 py-1 rounded-lg border border-teal-500/50 transition flex items-center gap-1 shadow text-[10px] font-bold" title="Alternar Modo de Mar: Estándar (JONSWAP) / La Guaira HD (Tecla O)">
+            <!-- Selector de Modo de Mar (Estándar / Mar 1.1) -->
+            <button id="toggleSeaModeBtn" class="bg-slate-900 hover:bg-teal-950 text-teal-300 px-2 sm:px-2.5 py-1 rounded-lg border border-teal-500/50 transition flex items-center gap-1 shadow text-[10px] font-bold" title="Alternar Modo de Mar: Estándar (JONSWAP) / Mar 1.1 (Tecla O)">
                 <span>🌊 Mar:</span> <span id="seaModeLabel" class="text-teal-400 font-bold">ESTÁNDAR</span>
             </button>
 
@@ -1896,7 +1896,7 @@ uniform vec3 u_camPos;
         scene.add(oceanRing);
 
         /* -------------------------------------------------------------------------
-           5b. MODO DE MAR ALTERNATIVO: MAR DE LA GUAIRA HD (Radial Exponencial + THREE.Water PBR + Gerstner Swell)
+           5b. MODO DE MAR ALTERNATIVO: MAR 1.1 (Radial Exponencial + THREE.Water PBR + Gerstner Swell)
            ------------------------------------------------------------------------- */
         const {
             Color, FrontSide, Matrix4, Mesh, PerspectiveCamera, Plane, ShaderMaterial,
@@ -2401,17 +2401,17 @@ class Water extends Mesh {
 
             const seaModeLabel = document.getElementById('seaModeLabel');
             if (seaModeLabel) {
-                seaModeLabel.innerText = isLaGuaira ? "LA GUAIRA HD" : "ESTÁNDAR";
+                seaModeLabel.innerText = isLaGuaira ? "MAR 1.1" : "ESTÁNDAR";
                 seaModeLabel.className = isLaGuaira ? "text-cyan-300 font-bold" : "text-teal-400 font-bold";
             }
             const dropLabel = document.getElementById('dropSeaModeLabel');
             if (dropLabel) {
-                dropLabel.innerText = isLaGuaira ? "LA GUAIRA HD" : "ESTÁNDAR";
+                dropLabel.innerText = isLaGuaira ? "MAR 1.1" : "ESTÁNDAR";
                 dropLabel.className = isLaGuaira ? "text-cyan-300 font-bold" : "text-teal-400 font-bold";
             }
 
             showSeaNotification(isLaGuaira
-                ? "🌊 MODO DE MAR: LA GUAIRA HD ACTIVADO (Gerstner & PBR 6-Octavas)"
+                ? "🌊 MODO DE MAR: MAR 1.1 ACTIVADO (Gerstner & PBR 6-Octavas)"
                 : "🌊 MODO DE MAR: ESTÁNDAR ACTIVADO (JONSWAP Espectral Bi-Nivel)");
         }
 
